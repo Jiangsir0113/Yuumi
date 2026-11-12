@@ -35,7 +35,7 @@ v1.2 已取消翻肚皮、摸肚皮和原来的侧躺姿势；碰爪互动改为
 
 ## 下载与使用
 
-1. 从 [Releases](https://github.com/Jiangsir0113/Yuumi/releases) 下载 `悠米.exe`。
+1. 从 [Releases](https://github.com/Jiangsir0113/Yuumi/releases) 下载 `Yuumi-v1.2.0-windows-x64.exe`。下载后可自行重命名为 `悠米.exe`。
 2. 若旧版本正在运行，先通过猫咪右键菜单或系统托盘选择“退出悠米”。
 3. 双击 exe。无需安装 Python；单文件程序首次启动需要几秒解包。
 
