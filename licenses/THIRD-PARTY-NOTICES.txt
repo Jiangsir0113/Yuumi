@@ -1,0 +1,33 @@
+Youmi Desktop 1.2.0
+
+This standalone program bundles dynamically linked Qt for Python components
+(PySide6, Shiboken6 and Qt 6.10.1), licensed under LGPL-3.0-only OR GPL-2.0-only
+OR GPL-3.0-only. This distribution uses the LGPL option. LGPL-3.0 and its
+referenced GPL-3.0 text are included in this directory.
+
+Qt project, sources and license information:
+https://www.qt.io/qt-for-python
+https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.10.1-src/
+https://download.qt.io/archive/qt/6.10/6.10.1/single/
+https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
+The source archive accompanying this executable contains the full application
+source, generated assets, requirements and build script. Users may replace the
+Qt/PySide libraries and rebuild with build.py. No installation keys, online
+activation, device lock or code-signing restrictions are used by this program.
+Reverse engineering for debugging modifications to LGPL libraries is permitted.
+
+Python 3.14: PSF license (included).
+PyInstaller 6.19: GPL with bootloader exception (included).
+Pillow 12.2: HPND license (included).
+NumPy 2.5.4: BSD license and bundled third-party notices (included).
+OpenCV headless 5.0.0.93: Apache-2.0 and third-party notices (included).
+NumPy and OpenCV are used locally for short, current-pose transition blends.
+
+Cat artwork was generated with OpenAI imagegen using the user's supplied cat
+photograph as the identity reference. The original photograph is not embedded
+in the executable. The optional purr is a quiet synthesized sound, not an
+audio recording of the user's cat.
+
+All care behavior, settings and saves are local. There is no application
+telemetry, runtime web service, login, or network-dependent functionality.

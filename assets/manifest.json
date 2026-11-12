@@ -1,0 +1,320 @@
+{
+  "idle": {
+    "frames": 6,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      87,
+      31,
+      233,
+      249
+    ],
+    "source_sheet": "idle"
+  },
+  "walk": {
+    "frames": 12,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      56,
+      77,
+      262,
+      249
+    ],
+    "source_sheet": "walk_detail"
+  },
+  "loaf": {
+    "frames": 2,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      69,
+      83,
+      251,
+      248
+    ],
+    "source_sheet": "rest"
+  },
+  "sleep": {
+    "frames": 2,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      43,
+      103,
+      276,
+      249
+    ],
+    "source_sheet": "rest"
+  },
+  "yawn": {
+    "frames": 3,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      86,
+      31,
+      233,
+      249
+    ],
+    "source_sheet": "rest"
+  },
+  "head": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      88,
+      31,
+      231,
+      249
+    ],
+    "source_sheet": "touch"
+  },
+  "chin": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      90,
+      33,
+      230,
+      249
+    ],
+    "source_sheet": "touch"
+  },
+  "back": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      76,
+      44,
+      243,
+      249
+    ],
+    "source_sheet": "touch"
+  },
+  "sniff": {
+    "frames": 6,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      66,
+      41,
+      252,
+      249
+    ],
+    "source_sheet": "sniff_detail"
+  },
+  "eat": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      64,
+      43,
+      255,
+      249
+    ],
+    "source_sheet": "care"
+  },
+  "lick": {
+    "frames": 6,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      85,
+      32,
+      235,
+      249
+    ],
+    "source_sheet": "lick_detail"
+  },
+  "groom": {
+    "frames": 6,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      87,
+      41,
+      233,
+      249
+    ],
+    "source_sheet": "care_detail"
+  },
+  "drink": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      72,
+      80,
+      247,
+      249
+    ],
+    "source_sheet": "care_detail"
+  },
+  "refuse": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      82,
+      31,
+      237,
+      249
+    ],
+    "source_sheet": "moods"
+  },
+  "nuzzle": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      86,
+      35,
+      233,
+      250
+    ],
+    "source_sheet": "moods"
+  },
+  "knead": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      77,
+      31,
+      243,
+      249
+    ],
+    "source_sheet": "moods"
+  },
+  "paw": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      87,
+      34,
+      233,
+      249
+    ],
+    "source_sheet": "extras"
+  },
+  "crouch": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      21,
+      87,
+      297,
+      249
+    ],
+    "source_sheet": "play"
+  },
+  "pounce": {
+    "frames": 6,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      55,
+      114,
+      265,
+      249
+    ],
+    "source_sheet": "pounce_detail"
+  },
+  "ball": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      61,
+      46,
+      259,
+      249
+    ],
+    "source_sheet": "play"
+  },
+  "stretch": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      67,
+      26,
+      252,
+      249
+    ],
+    "source_sheet": "extras"
+  },
+  "wave": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      87,
+      34,
+      233,
+      249
+    ],
+    "source_sheet": "extras"
+  },
+  "look": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      85,
+      30,
+      233,
+      249
+    ],
+    "source_sheet": "extras"
+  },
+  "bridge_sit_stand": {
+    "frames": 8,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      87,
+      31,
+      233,
+      249
+    ],
+    "source_sheet": "bridge_sit_stand",
+    "bridge": true,
+    "seconds": 0.46
+  },
+  "bridge_sit_loaf": {
+    "frames": 8,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      87,
+      31,
+      233,
+      249
+    ],
+    "source_sheet": "bridge_sit_loaf",
+    "bridge": true,
+    "seconds": 0.4
+  },
+  "bridge_loaf_sleep": {
+    "frames": 8,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      69,
+      83,
+      251,
+      248
+    ],
+    "source_sheet": "bridge_loaf_sleep",
+    "bridge": true,
+    "seconds": 0.46
+  }
+}
