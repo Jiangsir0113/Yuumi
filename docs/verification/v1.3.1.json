@@ -1,0 +1,517 @@
+{
+  "version": "1.3.1",
+  "test_date": "2026-11-13",
+  "unit_tests": {
+    "passed": true,
+    "count": 53
+  },
+  "scratcher_geometry": {
+    "source_width": 413,
+    "source_height": 768,
+    "logical_height": 132,
+    "rope_left": [
+      0.12,
+      0.72
+    ],
+    "rope_right": [
+      0.88,
+      0.72
+    ],
+    "track_center": [
+      0.5,
+      0.935
+    ],
+    "track_radius": [
+      0.365,
+      0.035
+    ]
+  },
+  "tail_color": "original golden",
+  "packaged_self_test": {
+    "version": "1.3.1",
+    "frozen_executable": true,
+    "smooth_webp_valid": true,
+    "render_timer_ms": 8,
+    "removed_actions": [
+      "roll",
+      "belly",
+      "side_sleep"
+    ],
+    "scene_objects_valid": true,
+    "rendered_actions": [
+      "idle",
+      "look",
+      "walk",
+      "trot",
+      "loaf",
+      "sleep",
+      "yawn",
+      "stretch",
+      "head",
+      "chin",
+      "back",
+      "cheek",
+      "paw",
+      "refuse",
+      "nuzzle",
+      "knead",
+      "wave",
+      "sniff",
+      "eat",
+      "treat",
+      "drink",
+      "lick",
+      "groom",
+      "crouch",
+      "pounce",
+      "ball",
+      "scratch",
+      "track"
+    ],
+    "ok": true,
+    "errors": []
+  },
+  "packaged_performance": {
+    "version": "1.3.1",
+    "diagnostic_looping": true,
+    "encoded_fps": 64,
+    "warmup_seconds_per_action": 2,
+    "all_actions_rendered_at_least_60fps": true,
+    "states": [
+      {
+        "action": "idle",
+        "seconds": 2.001,
+        "render_fps": 117.96,
+        "animation_events_per_second": 63.98,
+        "non_identical_frames_per_second": 117.96,
+        "p95_frame_gap_ms": 9.4,
+        "p99_frame_gap_ms": 9.69,
+        "cold_max_frame_gap_ms": 14.14,
+        "max_frame_gap_ms": 9.88
+      },
+      {
+        "action": "look",
+        "seconds": 2.0,
+        "render_fps": 118.99,
+        "animation_events_per_second": 63.99,
+        "non_identical_frames_per_second": 118.49,
+        "p95_frame_gap_ms": 9.35,
+        "p99_frame_gap_ms": 9.66,
+        "cold_max_frame_gap_ms": 11.15,
+        "max_frame_gap_ms": 9.83
+      },
+      {
+        "action": "walk",
+        "seconds": 2.003,
+        "render_fps": 117.83,
+        "animation_events_per_second": 63.91,
+        "non_identical_frames_per_second": 117.83,
+        "p95_frame_gap_ms": 9.56,
+        "p99_frame_gap_ms": 10.03,
+        "cold_max_frame_gap_ms": 11.0,
+        "max_frame_gap_ms": 10.33
+      },
+      {
+        "action": "trot",
+        "seconds": 2.0,
+        "render_fps": 116.98,
+        "animation_events_per_second": 105.98,
+        "non_identical_frames_per_second": 117.48,
+        "p95_frame_gap_ms": 9.42,
+        "p99_frame_gap_ms": 9.8,
+        "cold_max_frame_gap_ms": 10.07,
+        "max_frame_gap_ms": 10.5
+      },
+      {
+        "action": "loaf",
+        "seconds": 1.999,
+        "render_fps": 118.07,
+        "animation_events_per_second": 64.04,
+        "non_identical_frames_per_second": 118.07,
+        "p95_frame_gap_ms": 9.48,
+        "p99_frame_gap_ms": 10.01,
+        "cold_max_frame_gap_ms": 10.26,
+        "max_frame_gap_ms": 10.28
+      },
+      {
+        "action": "sleep",
+        "seconds": 1.994,
+        "render_fps": 118.35,
+        "animation_events_per_second": 64.19,
+        "non_identical_frames_per_second": 118.35,
+        "p95_frame_gap_ms": 9.44,
+        "p99_frame_gap_ms": 9.96,
+        "cold_max_frame_gap_ms": 10.65,
+        "max_frame_gap_ms": 12.19
+      },
+      {
+        "action": "yawn",
+        "seconds": 1.993,
+        "render_fps": 117.93,
+        "animation_events_per_second": 63.73,
+        "non_identical_frames_per_second": 117.93,
+        "p95_frame_gap_ms": 9.42,
+        "p99_frame_gap_ms": 10.05,
+        "cold_max_frame_gap_ms": 10.14,
+        "max_frame_gap_ms": 10.82
+      },
+      {
+        "action": "stretch",
+        "seconds": 2.003,
+        "render_fps": 117.32,
+        "animation_events_per_second": 63.9,
+        "non_identical_frames_per_second": 117.32,
+        "p95_frame_gap_ms": 9.94,
+        "p99_frame_gap_ms": 10.47,
+        "cold_max_frame_gap_ms": 10.95,
+        "max_frame_gap_ms": 10.86
+      },
+      {
+        "action": "head",
+        "seconds": 2.0,
+        "render_fps": 118.0,
+        "animation_events_per_second": 64.5,
+        "non_identical_frames_per_second": 118.5,
+        "p95_frame_gap_ms": 9.66,
+        "p99_frame_gap_ms": 10.17,
+        "cold_max_frame_gap_ms": 10.28,
+        "max_frame_gap_ms": 10.62
+      },
+      {
+        "action": "chin",
+        "seconds": 2.002,
+        "render_fps": 117.88,
+        "animation_events_per_second": 63.93,
+        "non_identical_frames_per_second": 117.88,
+        "p95_frame_gap_ms": 9.39,
+        "p99_frame_gap_ms": 9.56,
+        "cold_max_frame_gap_ms": 10.25,
+        "max_frame_gap_ms": 9.83
+      },
+      {
+        "action": "back",
+        "seconds": 1.998,
+        "render_fps": 117.63,
+        "animation_events_per_second": 64.07,
+        "non_identical_frames_per_second": 118.13,
+        "p95_frame_gap_ms": 9.43,
+        "p99_frame_gap_ms": 9.83,
+        "cold_max_frame_gap_ms": 10.7,
+        "max_frame_gap_ms": 10.21
+      },
+      {
+        "action": "cheek",
+        "seconds": 1.998,
+        "render_fps": 117.59,
+        "animation_events_per_second": 64.55,
+        "non_identical_frames_per_second": 118.09,
+        "p95_frame_gap_ms": 9.66,
+        "p99_frame_gap_ms": 10.07,
+        "cold_max_frame_gap_ms": 10.73,
+        "max_frame_gap_ms": 10.43
+      },
+      {
+        "action": "paw",
+        "seconds": 2.005,
+        "render_fps": 117.7,
+        "animation_events_per_second": 64.33,
+        "non_identical_frames_per_second": 117.7,
+        "p95_frame_gap_ms": 9.57,
+        "p99_frame_gap_ms": 10.17,
+        "cold_max_frame_gap_ms": 10.73,
+        "max_frame_gap_ms": 10.68
+      },
+      {
+        "action": "refuse",
+        "seconds": 1.993,
+        "render_fps": 117.9,
+        "animation_events_per_second": 63.72,
+        "non_identical_frames_per_second": 117.9,
+        "p95_frame_gap_ms": 9.46,
+        "p99_frame_gap_ms": 9.94,
+        "cold_max_frame_gap_ms": 10.88,
+        "max_frame_gap_ms": 10.18
+      },
+      {
+        "action": "nuzzle",
+        "seconds": 1.997,
+        "render_fps": 117.7,
+        "animation_events_per_second": 64.11,
+        "non_identical_frames_per_second": 117.7,
+        "p95_frame_gap_ms": 9.73,
+        "p99_frame_gap_ms": 10.28,
+        "cold_max_frame_gap_ms": 10.42,
+        "max_frame_gap_ms": 10.85
+      },
+      {
+        "action": "knead",
+        "seconds": 1.998,
+        "render_fps": 118.13,
+        "animation_events_per_second": 63.57,
+        "non_identical_frames_per_second": 117.63,
+        "p95_frame_gap_ms": 9.71,
+        "p99_frame_gap_ms": 10.43,
+        "cold_max_frame_gap_ms": 10.43,
+        "max_frame_gap_ms": 12.37
+      },
+      {
+        "action": "wave",
+        "seconds": 1.998,
+        "render_fps": 119.14,
+        "animation_events_per_second": 64.08,
+        "non_identical_frames_per_second": 119.14,
+        "p95_frame_gap_ms": 9.47,
+        "p99_frame_gap_ms": 9.9,
+        "cold_max_frame_gap_ms": 10.89,
+        "max_frame_gap_ms": 10.92
+      },
+      {
+        "action": "sniff",
+        "seconds": 1.998,
+        "render_fps": 118.64,
+        "animation_events_per_second": 64.07,
+        "non_identical_frames_per_second": 118.14,
+        "p95_frame_gap_ms": 9.56,
+        "p99_frame_gap_ms": 9.79,
+        "cold_max_frame_gap_ms": 10.39,
+        "max_frame_gap_ms": 9.92
+      },
+      {
+        "action": "eat",
+        "seconds": 2.0,
+        "render_fps": 116.99,
+        "animation_events_per_second": 63.49,
+        "non_identical_frames_per_second": 116.99,
+        "p95_frame_gap_ms": 9.84,
+        "p99_frame_gap_ms": 10.3,
+        "cold_max_frame_gap_ms": 10.18,
+        "max_frame_gap_ms": 10.91
+      },
+      {
+        "action": "treat",
+        "seconds": 2.0,
+        "render_fps": 118.02,
+        "animation_events_per_second": 64.01,
+        "non_identical_frames_per_second": 117.52,
+        "p95_frame_gap_ms": 9.56,
+        "p99_frame_gap_ms": 10.04,
+        "cold_max_frame_gap_ms": 9.91,
+        "max_frame_gap_ms": 11.02
+      },
+      {
+        "action": "drink",
+        "seconds": 1.997,
+        "render_fps": 117.65,
+        "animation_events_per_second": 64.08,
+        "non_identical_frames_per_second": 117.65,
+        "p95_frame_gap_ms": 9.31,
+        "p99_frame_gap_ms": 9.66,
+        "cold_max_frame_gap_ms": 11.81,
+        "max_frame_gap_ms": 9.9
+      },
+      {
+        "action": "lick",
+        "seconds": 2.0,
+        "render_fps": 118.01,
+        "animation_events_per_second": 64.0,
+        "non_identical_frames_per_second": 118.01,
+        "p95_frame_gap_ms": 9.52,
+        "p99_frame_gap_ms": 9.85,
+        "cold_max_frame_gap_ms": 10.82,
+        "max_frame_gap_ms": 9.96
+      },
+      {
+        "action": "groom",
+        "seconds": 2.005,
+        "render_fps": 118.21,
+        "animation_events_per_second": 64.34,
+        "non_identical_frames_per_second": 118.71,
+        "p95_frame_gap_ms": 9.34,
+        "p99_frame_gap_ms": 10.04,
+        "cold_max_frame_gap_ms": 10.94,
+        "max_frame_gap_ms": 10.16
+      },
+      {
+        "action": "crouch",
+        "seconds": 2.0,
+        "render_fps": 117.02,
+        "animation_events_per_second": 64.01,
+        "non_identical_frames_per_second": 116.52,
+        "p95_frame_gap_ms": 9.86,
+        "p99_frame_gap_ms": 10.38,
+        "cold_max_frame_gap_ms": 10.43,
+        "max_frame_gap_ms": 10.53
+      },
+      {
+        "action": "pounce",
+        "seconds": 1.998,
+        "render_fps": 118.1,
+        "animation_events_per_second": 64.05,
+        "non_identical_frames_per_second": 118.1,
+        "p95_frame_gap_ms": 9.41,
+        "p99_frame_gap_ms": 9.89,
+        "cold_max_frame_gap_ms": 9.85,
+        "max_frame_gap_ms": 10.34
+      },
+      {
+        "action": "ball",
+        "seconds": 1.997,
+        "render_fps": 118.19,
+        "animation_events_per_second": 64.6,
+        "non_identical_frames_per_second": 118.69,
+        "p95_frame_gap_ms": 9.31,
+        "p99_frame_gap_ms": 9.77,
+        "cold_max_frame_gap_ms": 10.36,
+        "max_frame_gap_ms": 10.13
+      },
+      {
+        "action": "scratch",
+        "seconds": 2.004,
+        "render_fps": 118.26,
+        "animation_events_per_second": 63.37,
+        "non_identical_frames_per_second": 117.76,
+        "p95_frame_gap_ms": 9.41,
+        "p99_frame_gap_ms": 9.82,
+        "cold_max_frame_gap_ms": 9.95,
+        "max_frame_gap_ms": 10.35
+      },
+      {
+        "action": "track",
+        "seconds": 2.0,
+        "render_fps": 117.99,
+        "animation_events_per_second": 63.99,
+        "non_identical_frames_per_second": 118.49,
+        "p95_frame_gap_ms": 9.64,
+        "p99_frame_gap_ms": 10.34,
+        "cold_max_frame_gap_ms": 10.97,
+        "max_frame_gap_ms": 11.21
+      }
+    ]
+  },
+  "scene_performance": {
+    "version": "1.3.1",
+    "real_time": true,
+    "warmup_seconds": 5,
+    "measure_seconds": 3,
+    "scenes": [
+      {
+        "activity": "scratch",
+        "render_fps": 117.8,
+        "p95_frame_gap_ms": 9.4,
+        "max_frame_gap_ms": 10.79,
+        "props": [
+          {
+            "kind": "scratcher",
+            "paint_fps": 117.8
+          }
+        ],
+        "stage": "interact"
+      },
+      {
+        "activity": "track",
+        "render_fps": 117.62,
+        "p95_frame_gap_ms": 9.4,
+        "max_frame_gap_ms": 10.06,
+        "props": [
+          {
+            "kind": "scratcher",
+            "paint_fps": 117.62
+          }
+        ],
+        "stage": "interact"
+      },
+      {
+        "activity": "ball",
+        "render_fps": 117.55,
+        "p95_frame_gap_ms": 10.21,
+        "max_frame_gap_ms": 10.85,
+        "props": [
+          {
+            "kind": "scratcher",
+            "paint_fps": 117.55
+          },
+          {
+            "kind": "ball",
+            "paint_fps": 117.55
+          }
+        ],
+        "stage": "approach"
+      },
+      {
+        "activity": "food",
+        "render_fps": 117.64,
+        "p95_frame_gap_ms": 9.49,
+        "max_frame_gap_ms": 13.66,
+        "props": [
+          {
+            "kind": "scratcher",
+            "paint_fps": 117.64
+          },
+          {
+            "kind": "ball",
+            "paint_fps": 117.64
+          },
+          {
+            "kind": "bowl",
+            "paint_fps": 117.64
+          }
+        ],
+        "stage": "interact"
+      }
+    ]
+  },
+  "preview": {
+    "version": "1.3.1",
+    "fps": 64,
+    "frames": 1856,
+    "scratch_strikes": 4,
+    "track_taps": 3,
+    "events": [
+      {
+        "time": 0.5,
+        "action": "scratch"
+      },
+      {
+        "time": 6.0,
+        "action": "track"
+      },
+      {
+        "time": 11.0,
+        "action": "ball"
+      },
+      {
+        "time": 14.0,
+        "action": "food"
+      },
+      {
+        "time": 25.0,
+        "action": "head"
+      },
+      {
+        "time": 25.40625,
+        "action": "chin"
+      },
+      {
+        "time": 25.703125,
+        "action": "back"
+      },
+      {
+        "time": 26.0,
+        "action": "head"
+      },
+      {
+        "time": 27.0,
+        "action": "stop"
+      }
+    ]
+  },
+  "exe_sha256": "610831262490dcf124b9efbe2d93c732e1a9121fceae7675672676c24fd80699",
+  "exe_size": 226186984,
+  "source_sha256_lf": {
+    "main.py": "4c967ef0c8b14470c38dade96ab2dfaa486355acbf783df947c31272a5cf63d9",
+    "animation_engine.py": "797291c71209cd5d79fa29ca6fca3cca01fd84c67461ef40d50fa8b414925123",
+    "cat_model.py": "3e2f2ffc7f1ae760d7dbbeeea172c2bd065fcbac99c97e67314aac171e832922",
+    "scene_model.py": "c7da273435c38c24b52f8ac2ff7b1648f36d2c0aca90f93e1e80083f55b68d79",
+    "scene_view.py": "f8eaead251011f3d1261a1520601f010bc419457a9cdd1feb7069952b3b1b192"
+  }
+}

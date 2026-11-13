@@ -38,7 +38,7 @@ labels={'scratch':'白色绳面 · 抓挠','track':'圆形槽道 · 拨球','bal
 encoder=subprocess.Popen([imageio_ffmpeg.get_ffmpeg_exe(),'-y','-hide_banner','-loglevel','error',
     '-f','rawvideo','-pix_fmt','rgb24','-s','960x600','-r','64','-i','-','-an',
     '-c:v','libx264','-preset','fast','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',
-    str(out/'Yuumi-v1.3.0-preview.mp4')],stdin=subprocess.PIPE)
+    str(out/f'Yuumi-v{VERSION}-preview.mp4')],stdin=subprocess.PIPE)
 index=0;label='悠米 · 安静陪伴'
 metrics={'version':VERSION,'fps':64,'frames':29*64,'scratch_strikes':0,'track_taps':0,'events':[]}
 for frame in range(29*64):
@@ -52,7 +52,7 @@ for frame in range(29*64):
     canvas=QImage(960,600,QImage.Format.Format_RGB888);canvas.fill(QColor('#f7f1e7'))
     p=QPainter(canvas);p.setRenderHint(QPainter.RenderHint.Antialiasing)
     p.setFont(QFont(font_family,22));p.setPen(QColor('#6c573e'))
-    p.drawText(QRect(0,20,960,46),Qt.AlignmentFlag.AlignCenter,'悠米 1.3 · '+label)
+    p.drawText(QRect(0,20,960,46),Qt.AlignmentFlag.AlignCenter,'悠米 '+VERSION+' · '+label)
     for prop in pet.scene_view.windows.values():
         if prop.isVisible():p.drawPixmap(prop.pos(),prop.grab())
     p.drawPixmap(pet.pos(),pet.grab())

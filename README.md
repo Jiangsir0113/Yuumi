@@ -2,11 +2,21 @@
 
 一只会在 Windows 桌面漫步、休息、吃猫粮，也会回应摸头、挠下巴和玩具的金渐层。照片风格，离线运行，本地存档。
 
-**[下载 v1.3.0](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.3.0)** · **[查看所有旧版本](https://github.com/Jiangsir0113/Yuumi/releases)** · **[更新日志](CHANGELOG.md)** · **[动作与玩具预览](docs/media/v1.3-preview.mp4)**
+**[下载 v1.3.1](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.3.1)** · **[查看所有旧版本](https://github.com/Jiangsir0113/Yuumi/releases)** · **[更新日志](CHANGELOG.md)** · **[动作与玩具预览](docs/media/v1.3.1-preview.mp4)**
 
-<p align="center"><img src="docs/images/v1.3-scratcher.png" width="760" alt="悠米抓挠大蒜猫抓板的白色绳面"></p>
+<p align="center"><img src="docs/images/v1.3.1-scratcher.png" width="760" alt="悠米在缩小且保持原始比例的大蒜猫抓板旁低位抓挠"></p>
 
 > 当前 Windows x64 构建内置 NumPy 2.5.4，仍需要 `x86-64-v2 / X86_V2` 指令集。本次没有变更 CPU 兼容目标，详见[兼容性说明](docs/COMPATIBILITY.md)。
+
+## v1.3.1 比例修复
+
+- 修复猫抓板横向拉伸：原素材为 413×768，上一版固定绘制到 220×330，横向拉宽约 24%；现在按原始宽高比等比绘制。
+- 默认总高度从 330 降到 132 个逻辑像素，宽度约 71；随桌宠大小同比缩放，约为低位抓挠猫咪可见高度的八成。
+- 更新低位抓挠姿势，重新对齐绳面、前爪和圆槽接触点，维持共同落地基线。
+- 已在可达位置再次开始互动时，直接接管，不先走一遍起身、走路、坐下流程。
+- 保留原来的金色尾巴和毛色。
+
+[查看前后对比](docs/images/v1.3.1-comparison.png) · [修复验证](docs/VERIFICATION-v1.3.1.md) · [后续改进建议](docs/IMPROVEMENTS.md)
 
 ## v1.3.0 与 v1.2.0 的区别
 
@@ -23,11 +33,11 @@
 | 陪伴 | 基础需求与熟悉度 | 抚摸偏好记忆、近期动作去重、轻量好奇倾向、玩后整理和疲倦休息 |
 | 工作模式 | 常规漫步与全屏隐藏 | 增加安静陪伴、鼠标穿透与托盘恢复；隐藏时停止动画渲染，降低更新频率 |
 
-**旧版本保留：** 每次更新创建新的版本标签和 Release，不覆盖旧 exe、不删除历史发布、不重写历史。需要旧版本时可下载 [v1.2.0](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.2.0)。
+**旧版本保留：** 每次更新创建新的版本标签和 Release，不覆盖旧 exe、不删除历史发布、不重写历史。[v1.3.0](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.3.0) 与 [v1.2.0](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.2.0) 均保留下载。
 
 ## 下载与启动
 
-1. 在 [v1.3.0 发布页](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.3.0) 下载 `Yuumi-v1.3.0-windows-x64.exe`，可自行重命名为 `悠米.exe`。
+1. 在 [v1.3.1 发布页](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.3.1) 下载 `Yuumi-v1.3.1-windows-x64.exe`，可自行重命名为 `悠米.exe`。
 2. 若旧版仍在运行，先用旧版的右键或托盘菜单正常退出。
 3. 双击 exe。无需安装 Python；单文件首次启动需要几秒解包。
 
@@ -89,7 +99,7 @@ py -3.14 -m venv .venv
 
 构建输出为 `dist/悠米.exe`。使用独立存档开发：`python main.py --state-file qa/dev-state.json --panel`。
 
-详见[开发说明](docs/DEVELOPMENT.md)、[v1.3 验证记录](docs/VERIFICATION-v1.3.md)和[版本发布规则](docs/RELEASING.md)。v1.2 的验证记录仍保留在[原文档](docs/VERIFICATION.md)。
+详见[开发说明](docs/DEVELOPMENT.md)、[v1.3.1 验证记录](docs/VERIFICATION-v1.3.1.md)和[版本发布规则](docs/RELEASING.md)。旧版验证记录仍保留：[v1.3.0](docs/VERIFICATION-v1.3.md)、[v1.2.0](docs/VERIFICATION.md)。
 
 ## 实现与数据
 

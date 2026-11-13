@@ -2929,8 +2929,8 @@
         1.406
       ],
       "duration": 1.406,
-      "source_max_step": 0.045321,
-      "output_max_step": 0.004127
+      "source_max_step": 0.053705,
+      "output_max_step": 0.005604
     },
     "bridge_stand_turn": {
       "source_frames": 4,

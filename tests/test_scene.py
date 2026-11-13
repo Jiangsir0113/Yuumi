@@ -13,6 +13,7 @@ class SceneTests(unittest.TestCase):
 
     def arrive(self,scene,model):
         scene.update(.016,model,100,200,1,True,0)
+        if scene.activity.stage!='approach':return 100,200
         x,y=scene.destination
         scene.update(.016,model,x,y,1,True,0)
         return x,y
@@ -64,7 +65,7 @@ class SceneTests(unittest.TestCase):
 
     def test_rope_and_track_are_separate_and_stop_preserves_prop(self):
         s,m=self.scene('scratch');x,y=self.arrive(s,m)
-        s.update(.016,m,x,y,1,True,.7)
+        s.update(.016,m,x,y,1,True,.28)
         self.assertEqual(s.scratcher.scratches,1)
         self.assertEqual(s.scratcher.taps,0)
         s.cancel(m)
@@ -86,6 +87,39 @@ class SceneTests(unittest.TestCase):
             x,y=s.ball_position(i)
             ellipse=((x-s.x-s.width*.5)/(s.width*.365))**2+((y-s.y-s.height*.935)/(s.height*.035))**2
             self.assertAlmostEqual(ellipse,1,places=5)
+
+    def test_scratcher_is_smaller_than_cat_and_keeps_asset_aspect(self):
+        for scale in [.65,1.,1.5]:
+            toy=Scratcher(300,500,scale)
+            self.assertAlmostEqual(toy.width/toy.height,413/768,places=8)
+            self.assertLess(toy.height,175*scale*.8)
+            self.assertAlmostEqual(toy.y+toy.height,toy.floor)
+
+    def test_replaying_reachable_track_does_not_request_walking(self):
+        s,m=self.scene('track');x,y=self.arrive(s,m)
+        s.cancel(m);m.recent.clear()
+        s.begin('track',m,x,y,1,LIMITS)
+        self.assertEqual(s.activity.stage,'interact')
+        self.assertEqual(m.action,'track')
+        self.assertNotIn('walk',m.recent)
+
+    def test_rope_contact_stays_aligned_at_all_sizes_and_sides(self):
+        for scale in [.65,1.,1.5]:
+            for side in [1,-1]:
+                model=CatModel();scene=SceneController()
+                scene.begin('scratch',model,300,200,scale,LIMITS)
+                toy=scene.scratcher
+                if side<0:toy.x=0
+                scene.activity.stage='approach'
+                scene.update(0,model,300,200,scale,True,0)
+                point=scene.destination or (300,200)
+                x,y=point
+                scene.update(0,model,x,y,scale,True,0)
+                self.assertEqual(scene.direction,side)
+                contact=toy.x+toy.width*(toy.rope_left[0] if side>0 else toy.rope_right[0])
+                paw=x+(282 if side>0 else 38)*scale
+                self.assertLessEqual(abs(paw-contact),4*scale)
+                self.assertAlmostEqual(y+286*scale,toy.floor,places=5)
 
     def test_moving_scratcher_updates_destination(self):
         s,m=self.scene('scratch')

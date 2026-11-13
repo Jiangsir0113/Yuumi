@@ -145,16 +145,27 @@ class GuiTests(unittest.TestCase):
         self.pet.perform('scratch')
         prop=self.pet.scene_view.windows['scratcher']
         original=self.pet.scene.scratcher.x
-        QTest.mousePress(prop,Qt.MouseButton.LeftButton,pos=QPoint(100,180))
-        QTest.mouseMove(prop,QPoint(130,180),delay=20)
-        QTest.mouseRelease(prop,Qt.MouseButton.LeftButton,pos=QPoint(130,180))
+        point=QPoint(prop.width()//2,round(prop.height()*.55))
+        QTest.mousePress(prop,Qt.MouseButton.LeftButton,pos=point)
+        QTest.mouseMove(prop,point+QPoint(30,0),delay=20)
+        QTest.mouseRelease(prop,Qt.MouseButton.LeftButton,pos=point+QPoint(30,0))
         self.assertNotEqual(self.pet.scene.scratcher.x,original)
         self.assertEqual(self.pet.scene.activity.kind,'scratch')
-        QTest.mouseClick(prop,Qt.MouseButton.LeftButton,pos=QPoint(110,315))
+        QTest.mouseClick(prop,Qt.MouseButton.LeftButton,pos=QPoint(prop.width()//2,round(prop.height()*.96)))
         self.assertEqual(self.pet.scene.activity.kind,'track')
         self.assertGreater(self.pet.scene.scratcher.taps,0)
         QTest.mouseClick(self.pet.scene_view.buttons['put_away'],Qt.MouseButton.LeftButton)
         self.assertIsNone(self.pet.scene.scratcher)
+
+    def test_prop_scales_without_stretching(self):
+        self.pet.perform('scratch')
+        prop=self.pet.scene_view.windows['scratcher']
+        ratio=prop.image.width()/prop.image.height()
+        for scale in [.65,1.,1.5]:
+            self.pet.change_size(scale);prop.sync()
+            self.assertAlmostEqual(self.pet.scene.scratcher.width/self.pet.scene.scratcher.height,ratio,places=6)
+            self.assertLess(abs(prop.width()/prop.height()-ratio),1/prop.height())
+            self.assertLess(prop.height(),175*scale*.8+1)
 
     def test_hidden_tick_does_not_render_or_animate(self):
         before=self.pet.animator.clock

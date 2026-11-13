@@ -37,6 +37,7 @@ py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe tools/prepare_assets.py
 .\.venv\Scripts\python.exe tools/prepare_bridges.py
 .\.venv\Scripts\python.exe tools/prepare_v13_assets.py
+.\.venv\Scripts\python.exe tools/prepare_v131_assets.py
 .\.venv\Scripts\python.exe tools/smooth_motion.py
 ```
 
@@ -45,6 +46,8 @@ py -3.14 -m venv .venv
 `animation_engine.py` 将视觉时钟与 `cat_model.py` 的行为时长分开。姿势图连接坐姿、左右站姿、揣手与睡眠；新意图可以反向已有边。局部切换从上一张已显示画面开始，目标动作使用最近姿势相位，走路和小跑共享步态。
 
 v1.3 增加左右站姿直接转身，图允许环路，反向时比较两端的剩余路线。结构进入和局部混合期间暂停目标动作相位，行为时间按 `execution_ready` 推进。后台解码为预分配数组；缓存预算包含待完成解码。动态光流使用独立单线程工作队列，过期排队任务取消，主线程使用轻量混合连续回退。
+
+v1.3.1 将抓板尺寸和源图宽高记录在 `assets/props/garlic-layout.json`；窗口绘制仍明确保持原始比例，避免固定矩形拉伸。缩放、圆槽和绳面接触共用几何参数。更新素材时应核对配置中的源图尺寸，运行不同桌宠大小及左右朝向的接触测试。
 
 `scene_model.py` 无 Qt 依赖，保存世界坐标、物理状态和单个活动意图。到达和接触驱动喂食/拨球，不使用超时冒充成功。`scene_view.py` 只管理独立的小道具窗口，不创建覆盖整个桌面的输入层。抚摸按每次仿真步的真实接触时长计算；鼠标事件只更新轨迹和部位。
 

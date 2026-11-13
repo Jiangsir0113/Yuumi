@@ -1,6 +1,8 @@
 """World-coordinate care/play. No UI, timers, network or platform dependencies."""
 from dataclasses import dataclass, field
 import math
+import json
+from pathlib import Path
 from cat_model import CARE_ACTIONS, clamp
 
 TAU=math.tau
@@ -39,23 +41,31 @@ class Scratcher:
     x: float
     floor: float
     scale: float=1.
+    logical_height: float=132.
+    source_width: int=413
+    source_height: int=768
+    rope_left: tuple=(.12,.72)
+    rope_right: tuple=(.88,.72)
+    track_center: tuple=(.5,.935)
+    track_radius: tuple=(.365,.035)
     angles: list=field(default_factory=lambda:[.5,2.6,4.7])
     speeds: list=field(default_factory=lambda:[0.,0.,0.])
     scratches: int=0
     taps: int=0
     glow: float=0.
+    glow_side: int=1
 
     @property
-    def width(self): return 220*self.scale
+    def width(self): return self.height*self.source_width/self.source_height
     @property
-    def height(self): return 330*self.scale
+    def height(self): return self.logical_height*self.scale
     @property
     def y(self): return self.floor-self.height
 
     def ball_position(self,i):
         a=self.angles[i]
-        return (self.x+self.width*(.5+.365*math.cos(a)),
-                self.y+self.height*(.935+.035*math.sin(a)))
+        return (self.x+self.width*(self.track_center[0]+self.track_radius[0]*math.cos(a)),
+                self.y+self.height*(self.track_center[1]+self.track_radius[1]*math.sin(a)))
 
     def impulse(self,index,velocity=3.5):
         self.speeds[index]=max(-7.,min(7.,self.speeds[index]+velocity))
@@ -92,6 +102,7 @@ class Activity:
 
 class SceneController:
     def __init__(self):
+        self.prop_layout=json.loads((Path(__file__).resolve().parent/'assets/props/garlic-layout.json').read_text(encoding='utf-8'))
         self.activity=None
         self.bowl=None
         self.ball=None
@@ -167,8 +178,10 @@ class SceneController:
         elif kind in {'scratch','track'}:
             if self.scratcher is None:
                 sx=clamp(x+285*scale,l+30*scale,r+100*scale)
-                sf=clamp(floor,t+330*scale,b+286*scale)
-                self.scratcher=Scratcher(sx,sf,scale)
+                layout=self.prop_layout
+                sf=clamp(floor,t+layout['logical_height']*scale,b+286*scale)
+                self.scratcher=Scratcher(sx,sf,scale,layout['logical_height'],layout['source_width'],layout['source_height'],
+                                         tuple(layout['rope_left']),tuple(layout['rope_right']),tuple(layout['track_center']),tuple(layout['track_radius']))
             self.message='抓抓白色绳面' if kind=='scratch' else '用小爪拨动圆槽里的球'
         elif kind=='wand':
             self.activity.stage='watch'
@@ -179,7 +192,7 @@ class SceneController:
             raise ValueError('Unknown scene activity')
         if kind!='wand':
             model.queue.clear()
-            model.start('walk')
+            self.update(0.,model,x,y,scale,True,0.,limits=limits)
         return True
 
     def _enter(self,stage,model,action):
@@ -231,16 +244,17 @@ class SceneController:
         else:
             obj=self.scratcher
             # Prefer a side with room for the entire cat; turn toward the prop.
-            left_target=obj.x+obj.width*.18-282*scale
-            right_target=obj.x+obj.width*.82-38*scale
+            paw=282 if kind=='scratch' else 270
+            left_x=obj.rope_left[0] if kind=='scratch' else obj.track_center[0]-obj.track_radius[0]
+            right_x=obj.rope_right[0] if kind=='scratch' else obj.track_center[0]+obj.track_radius[0]
+            left_target=obj.x+obj.width*left_x-paw*scale
+            right_target=obj.x+obj.width*right_x-(320-paw)*scale
             self.direction=1 if left_target>=l else -1
             target=self._target(left_target if self.direction>0 else right_target,obj.floor-286*scale)
         distance=math.hypot(target[0]-x,target[1]-y)
         if a.stage=='approach':
             self.destination=target
-            if model.action not in {'walk','trot'}:
-                model.queue.clear();model.start('walk')
-            if distance<4*scale and ready:
+            if distance<4*scale:
                 self.destination=None
                 a.stage='interact';a.stage_time=0.;a.contact_cycle=-1
                 if kind in {'food','water','snack'}:
@@ -248,6 +262,8 @@ class SceneController:
                     model.request(kind)
                 else:
                     model.queue.clear();model.start('ball' if kind=='ball' else kind,90)
+            elif model.action not in {'walk','trot'}:
+                model.queue.clear();model.start('walk')
             return
         if kind in {'food','water','snack'}:
             need=model.thirst if kind=='water' else model.satiety
@@ -267,17 +283,19 @@ class SceneController:
         duration=1.4 if kind=='scratch' else 1.328
         cycle=int(phase/duration)
         fraction=phase/duration-cycle
-        if .33<=fraction<=.75 and a.contact_cycle!=cycle:
+        strike=.10<=fraction<=.30 if kind=='scratch' else .48<=fraction<=.75
+        if strike and a.contact_cycle!=cycle:
             a.contact_cycle=cycle
             hit=False
             if kind=='scratch':
                 obj.scratches+=1;obj.glow=.2
+                obj.glow_side=self.direction
                 hit=True
             elif kind=='track':
                 contact_x=x+(278 if self.direction>0 else 42)*scale
                 index=min(range(3),key=lambda i:abs(obj.ball_position(i)[0]-contact_x))
                 # A bat occurs only when a ball reaches the paw's contact arc.
-                if abs(obj.ball_position(index)[0]-contact_x)<38*scale:
+                if abs(obj.ball_position(index)[0]-contact_x)<min(18*scale,obj.width*.20):
                     obj.impulse(index,3.8*self.direction)
                     hit=True
             else:

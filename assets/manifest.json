@@ -330,12 +330,12 @@
     "width": 320,
     "height": 260,
     "bounds": [
-      41,
-      37,
-      278,
+      26,
+      88,
+      294,
       250
     ],
-    "source_sheet": "v13-generated",
+    "source_sheet": "scratch-low",
     "seconds": 1.4,
     "bridge": false
   },

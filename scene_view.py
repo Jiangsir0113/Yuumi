@@ -61,7 +61,10 @@ class PropWindow(QWidget):
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         s=self.cat.scale
         if self.kind=='scratcher':
-            p.drawPixmap(self.rect(),self.image)
+            factor=min(self.width()/self.image.width(),self.height()/self.image.height())
+            width,height=self.image.width()*factor,self.image.height()*factor
+            fitted=QRectF((self.width()-width)/2,(self.height()-height)/2,width,height)
+            p.drawPixmap(fitted,self.image,QRectF(self.image.rect()))
             # Clip to the track's opening; balls remain under the upper plate.
             for i in sorted(range(3),key=lambda n:math.sin(data.angles[n])):
                 x,y=data.ball_position(i)
@@ -73,8 +76,9 @@ class PropWindow(QWidget):
             if data.glow>0:
                 p.setPen(QPen(QColor(245,221,165,round(160*data.glow/.2)),1.5*s))
                 for i in range(3):
-                    p.drawLine(QPointF(data.width*.18+i*7*s,data.height*.48),
-                               QPointF(data.width*.16+i*7*s,data.height*.58))
+                    direction=1 if data.glow_side>0 else -1
+                    x=data.width*(.12 if direction>0 else .88)+i*data.width*.035*direction
+                    p.drawLine(QPointF(x,data.height*.64),QPointF(x-data.width*.02*direction,data.height*.80))
         elif self.kind=='bowl':
             p.scale(s,s)
             p.setPen(QPen(QColor('#a88b6a'),1.3))
