@@ -44,6 +44,8 @@ class SceneTests(unittest.TestCase):
 
     def test_bowl_consumes_only_after_arrival_and_actual_intake(self):
         s,m=self.scene('food');x,y=self.arrive(s,m)
+        self.assertEqual(m.action,'look')
+        for _ in range(6):s.update(.25,m,x,y,1,True,0)
         self.assertEqual(m.action,'sniff')
         m.tick(2)
         m.tick(1)
@@ -88,11 +90,11 @@ class SceneTests(unittest.TestCase):
             ellipse=((x-s.x-s.width*.5)/(s.width*.365))**2+((y-s.y-s.height*.935)/(s.height*.035))**2
             self.assertAlmostEqual(ellipse,1,places=5)
 
-    def test_scratcher_is_smaller_than_cat_and_keeps_asset_aspect(self):
+    def test_scratcher_is_1_2_times_seated_cat_and_keeps_asset_aspect(self):
         for scale in [.65,1.,1.5]:
             toy=Scratcher(300,500,scale)
             self.assertAlmostEqual(toy.width/toy.height,413/768,places=8)
-            self.assertLess(toy.height,175*scale*.8)
+            self.assertAlmostEqual(toy.height/(220*scale),1.2,places=7)
             self.assertAlmostEqual(toy.y+toy.height,toy.floor)
 
     def test_replaying_reachable_track_does_not_request_walking(self):
@@ -117,7 +119,7 @@ class SceneTests(unittest.TestCase):
                 scene.update(0,model,x,y,scale,True,0)
                 self.assertEqual(scene.direction,side)
                 contact=toy.x+toy.width*(toy.rope_left[0] if side>0 else toy.rope_right[0])
-                paw=x+(282 if side>0 else 38)*scale
+                paw=x+(276 if side>0 else 44)*scale
                 self.assertLessEqual(abs(paw-contact),4*scale)
                 self.assertAlmostEqual(y+286*scale,toy.floor,places=5)
 

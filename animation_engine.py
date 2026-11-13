@@ -422,7 +422,9 @@ class Animator:
         nx=(x-xx.min())/max(1,xx.max()-xx.min())
         ny=(y-yy.min())/max(1,yy.max()-yy.min())
         if self.action=="scratch":
-            points=[("head",.82,.20),("chin",.88,.37),("cheek",.73,.28),("back",.35,.42),("paw",.88,.88)]
+            points=[("head",.73,.14),("chin",.79,.28),("cheek",.63,.22),("back",.35,.58),("paw",.90,.42)]
+        elif self.action in {"eat","sniff"}:
+            points=[("head",.87,.60),("chin",.91,.77),("cheek",.79,.65),("back",.35,.28),("paw",.73,.94)]
         elif self.posture(self.action,self.direction).startswith("stand"):
             points=[("head",.80,.17),("chin",.88,.32),("cheek",.71,.27),("back",.35,.46),("paw",.72,.92)]
         elif self.action in {"ball","track"}:

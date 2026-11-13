@@ -42,7 +42,7 @@ diagnostic("Qt modules imported")
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 ASSETS = ROOT / "assets"
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 
 
 def state_path():
@@ -98,7 +98,7 @@ class CarePanel(QDialog):
     def __init__(self, pet):
         super().__init__(None, Qt.WindowType.Window)
         self.pet = pet
-        self.setWindowTitle("悠米 1.3.1 · 陪伴小屋")
+        self.setWindowTitle("悠米 1.4.0 · 陪伴小屋")
         self.setWindowIcon(pet.windowIcon())
         self.setMinimumWidth(440)
         self.resize(460, 610)
@@ -136,8 +136,8 @@ class CarePanel(QDialog):
             ("paw", "碰爪爪", "伸爪，再轻轻收回来"), ("nuzzle", "蹭蹭你", "贴近一点点"),
             ("knead", "踩奶", "小爪子交替踩踩"), ("idle", "放松一会儿", "安静陪着你")],
             "也可以直接在猫咪身上按住左键轻轻移动。\n摸久了会想休息，给它一点自己的时间。")
-        self.add_actions("照顾", [("food", "喂猫粮", "闻一闻、吃粮、舔嘴、洗脸"),
-            ("snack", "小零食", "奖励一点点，饱了就不吃啦"), ("water", "喝点水", "补充水分"),
+        self.add_actions("照顾", [("food", "SOLO 喂食器", "弗列加特烘焙粮 · 出粮后自己走去吃"),
+            ("snack", "弗列加特猫条", "靠近开口舔食，吃完可右键换一支"), ("water", "SOLO SE 饮水机", "流水与余量反馈，右键可续水"),
             ("sleep", "哄它睡觉", "从当前姿势安稳蜷起来"), ("wake", "轻轻叫醒", "睁眼，回到放松姿势"),
             ("groom", "洗脸理毛", "爱干净的小猫"), ("loaf", "揣手手", "安安静静陪你")],
             "离线不扣照顾分，也不会因为忘记喂食生病。\n吃喝过程中再点喂食，不会重复加饱腹。")
@@ -468,6 +468,8 @@ class CatWindow(QWidget):
         self.resize(round(320*self.scale), round(307*self.scale))
         if self.scene.scratcher:self.scene.scratcher.scale=self.scale
         if self.scene.ball:self.scene.ball.radius=12*self.scale
+        for obj in (self.scene.feeder,self.scene.fountain,self.scene.snack):
+            if obj:obj.scale=self.scale
         self.move_safe(QPoint(self.x(), baseline-self.height()))
         self.save()
 
@@ -494,6 +496,11 @@ class CatWindow(QWidget):
             kind="wand" if action=="toy" else action
             self.scene.begin(kind,self.model,self.x(),self.y(),self.scale,self.scene_limits())
             self.toy_mode=kind=="wand"
+            upcoming={"food":"eat","water":"drink","snack":"drink","scratch":"scratch","track":"ball","ball":"ball"}.get(kind)
+            if upcoming:
+                self.animator.bank.prefetch(upcoming)
+                if upcoming in self.animator.bank.warm:self.animator.bank.warm.remove(upcoming)
+                self.animator.bank.warm.appendleft(upcoming)
             self.say(self.scene.message,6)
             self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
             self.toy_ball=self.scene_view.windows.get("ball")
@@ -886,6 +893,23 @@ def executable_self_test(pet, output):
         assert pet.scene.scratcher is not None and pet.scene.activity is None
         pet.perform("put_away")
         assert pet.scene.scratcher is None
+        for kind,attr in [("food","feeder"),("water","fountain"),("snack","snack")]:
+            pet.model.satiety=pet.model.thirst=30
+            pet.perform(kind)
+            device=getattr(pet.scene,attr)
+            assert device is not None
+            window=pet.scene_view.windows[attr]
+            assert not window.image.isNull(),"Packaged equipment art missing: "+attr
+            assert window.image.hasAlphaChannel()
+            assert abs(device.width/device.height-window.image.width()/window.image.height())<.001
+            if attr=="feeder":assert not window.packet.isNull()
+            if attr in {"feeder","snack"}:assert not window.reverse.isNull()
+            QApplication.processEvents()
+            window.grab().save(str(output/(attr+".png")))
+        pet.perform("stop")
+        assert pet.scene.feeder and pet.scene.fountain and pet.scene.snack
+        pet.perform("put_away")
+        assert pet.scene.feeder is pet.scene.fountain is pet.scene.snack is None
     except Exception:
         errors.append(traceback.format_exc())
     report = {"version": VERSION, "frozen_executable": bool(getattr(sys, "frozen", False)),
@@ -924,7 +948,7 @@ def main():
             running=bytes(socket.readAll()).decode(errors="replace")
             if running!=VERSION:
                 QMessageBox.information(None,"先退出旧版悠米",
-                    "旧版悠米仍在运行。请从系统托盘或猫咪右键菜单选择“退出悠米”，再打开这个 1.3.1 新版。")
+                    "旧版悠米仍在运行。请从系统托盘或猫咪右键菜单选择“退出悠米”，再打开这个 1.4.0 新版。")
             return 0
         server = QLocalServer()
         QLocalServer.removeServer(channel)

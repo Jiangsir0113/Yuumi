@@ -165,7 +165,7 @@ class GuiTests(unittest.TestCase):
             self.pet.change_size(scale);prop.sync()
             self.assertAlmostEqual(self.pet.scene.scratcher.width/self.pet.scene.scratcher.height,ratio,places=6)
             self.assertLess(abs(prop.width()/prop.height()-ratio),1/prop.height())
-            self.assertLess(prop.height(),175*scale*.8+1)
+            self.assertLess(abs(prop.height()-264*scale),.6)
 
     def test_hidden_tick_does_not_render_or_animate(self):
         before=self.pet.animator.clock
@@ -175,6 +175,32 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.pet.animator.clock,before)
         self.assertEqual(self.pet.timer.interval(),250)
         self.assertFalse(self.pet.scene_view.toolbar.isVisible())
+
+    def test_equipment_art_refill_clicks_and_independent_windows(self):
+        self.pet.model.satiety=self.pet.model.thirst=30
+        for action in ['food','water','snack']:self.pet.perform(action)
+        self.assertTrue({'feeder','fountain','snack'}<=self.pet.scene_view.windows.keys())
+        for kind in ['feeder','fountain','snack']:
+            window=self.pet.scene_view.windows[kind]
+            self.assertFalse(window.image.isNull())
+            self.assertTrue(window.image.hasAlphaChannel())
+            if kind in {"feeder","snack"}:self.assertFalse(window.reverse.isNull())
+            if kind=='feeder':
+                self.pet.scene.feeder.stock=0
+                point=QPoint(round(window.data.width+window.data.extra_width/2),window.height()-20)
+                QTest.mouseClick(window,Qt.MouseButton.LeftButton,pos=point)
+                self.assertEqual(self.pet.scene.feeder.stock,8)
+            else:
+                window.data.amount=0
+                window.refill()
+                self.assertEqual(window.data.amount,1)
+            for size in [.65,1.,1.5]:
+                self.pet.change_size(size);window.sync()
+                self.assertLess(abs(window.height()-window.data.logical_height*size),.6)
+        self.pet.perform('stop')
+        self.assertEqual(len(self.pet.scene_view.windows),3)
+        self.pet.perform('put_away')
+        self.assertFalse(self.pet.scene_view.windows)
 
     def test_click_through_can_be_recovered_from_tray_path(self):
         self.pet.setting('click_through',True)

@@ -28,7 +28,7 @@ class LiveBenchmark:
     def next(self):
         self.index+=1
         if self.index>=len(self.actions):
-            report={"version":"1.3.1","diagnostic_looping":True,"encoded_fps":64,
+            report={"version":"1.4.0","diagnostic_looping":True,"encoded_fps":64,
                 "warmup_seconds_per_action":2,
                 "all_actions_rendered_at_least_60fps":all(r["render_fps"]>=60 for r in self.results),
                 "states":self.results}

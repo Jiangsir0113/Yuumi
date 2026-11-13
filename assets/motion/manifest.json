@@ -1239,8 +1239,8 @@
         2.0
       ],
       "duration": 1.999999999999999,
-      "source_max_step": 0.061545,
-      "output_max_step": 0.00484
+      "source_max_step": 0.008564,
+      "output_max_step": 0.000443
     },
     "eat": {
       "source_frames": 4,
@@ -1335,8 +1335,8 @@
         1.328
       ],
       "duration": 1.328,
-      "source_max_step": 0.061545,
-      "output_max_step": 0.006892
+      "source_max_step": 0.008564,
+      "output_max_step": 0.000667
     },
     "lick": {
       "source_frames": 6,
@@ -1773,8 +1773,8 @@
         1.328
       ],
       "duration": 1.328,
-      "source_max_step": 0.061545,
-      "output_max_step": 0.006892
+      "source_max_step": 0.009931,
+      "output_max_step": 0.00082
     },
     "refuse": {
       "source_frames": 4,
@@ -2929,8 +2929,8 @@
         1.406
       ],
       "duration": 1.406,
-      "source_max_step": 0.053705,
-      "output_max_step": 0.005604
+      "source_max_step": 0.045321,
+      "output_max_step": 0.004127
     },
     "bridge_stand_turn": {
       "source_frames": 4,

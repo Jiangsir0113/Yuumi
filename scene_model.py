@@ -14,6 +14,39 @@ class Bowl:
     kind: str
     amount: float=1.
     facing: int=1
+    scale: float=1.
+    logical_height: float=215.
+    aspect: float=1.
+    mouth: tuple=(.25,.82)
+    stock: int=8
+    dispensing: float=0.
+    pulse: float=0.
+    logical_extra: float=0.
+
+    @property
+    def height(self): return self.logical_height*self.scale
+    @property
+    def width(self): return self.height*self.aspect
+    @property
+    def left(self): return self.x-self.width*(self.mouth[0] if self.facing>0 else 1-self.mouth[0])
+    @property
+    def y(self): return self.floor-self.height
+    @property
+    def contact_y(self): return self.y+self.height*self.mouth[1]
+    @property
+    def extra_width(self): return self.logical_extra*self.scale
+
+    def dispense(self):
+        if self.kind!='food' or self.amount>.01 or self.dispensing>0 or self.stock<=0:return False
+        self.stock-=1;self.dispensing=1.2;self.amount=0.
+        return True
+
+    def step(self,dt):
+        if self.dispensing>0:
+            before=self.dispensing
+            self.dispensing=max(0.,before-dt)
+            self.amount=min(1.,self.amount+(before-self.dispensing)/1.2)
+        self.pulse=max(0.,self.pulse-dt)
 
 @dataclass
 class Ball:
@@ -41,11 +74,11 @@ class Scratcher:
     x: float
     floor: float
     scale: float=1.
-    logical_height: float=132.
+    logical_height: float=264.
     source_width: int=413
     source_height: int=768
-    rope_left: tuple=(.12,.72)
-    rope_right: tuple=(.88,.72)
+    rope_left: tuple=(.24,.54)
+    rope_right: tuple=(.76,.54)
     track_center: tuple=(.5,.935)
     track_radius: tuple=(.365,.035)
     angles: list=field(default_factory=lambda:[.5,2.6,4.7])
@@ -103,8 +136,10 @@ class Activity:
 class SceneController:
     def __init__(self):
         self.prop_layout=json.loads((Path(__file__).resolve().parent/'assets/props/garlic-layout.json').read_text(encoding='utf-8'))
+        self.equipment_layout=json.loads((Path(__file__).resolve().parent/'assets/props/equipment-layout.json').read_text(encoding='utf-8'))
         self.activity=None
         self.bowl=None
+        self.feeder=self.fountain=self.snack=None
         self.ball=None
         self.scratcher=None
         self.destination=None
@@ -131,10 +166,38 @@ class SceneController:
     def put_away(self,model=None):
         self.cancel(model)
         self.bowl=self.ball=self.scratcher=None
+        self.feeder=self.fountain=self.snack=None
+
+    def refill(self,kind):
+        obj=getattr(self,{'food':'feeder','water':'fountain','snack':'snack'}[kind])
+        if obj is None:return False
+        if kind=='food':
+            obj.stock=8
+            self.message='弗列加特猫粮已补满；点喂食器出一份'
+        else:
+            obj.amount=1.
+            self.message='SOLO SE 已续水' if kind=='water' else '换好一支弗列加特猫条'
+        obj.pulse=1.
+        return True
 
     def _target(self,x,y):
         l,t,r,b=self.limits
         return (clamp(x,l,r),clamp(y,t,b))
+
+    def _place_equipment(self,obj,preferred,scale):
+        """Place complete silhouettes, including the food bag, inside the screen."""
+        l,t,r,b=self.limits
+        obstacles=[(o.left,o.left+o.width+o.extra_width) for o in (self.feeder,self.fountain,self.snack) if o and o is not obj]
+        if self.scratcher:obstacles.append((self.scratcher.x,self.scratcher.x+self.scratcher.width))
+        width=obj.width+obj.extra_width
+        candidates=[preferred-obj.width*obj.mouth[0],l,r+320*scale-width]
+        for left,right in obstacles:candidates.extend([left-width-20*scale,right+20*scale])
+        def score(left):
+            overlap=sum(max(0.,min(left+width,right)-max(left,start)) for start,right in obstacles)
+            return overlap*100+abs(left+obj.width*obj.mouth[0]-preferred)
+        left=min((clamp(c,l,r+320*scale-width) for c in candidates),key=score)
+        obj.facing=1 if left+obj.width*obj.mouth[0]-286*scale>=l else -1
+        obj.x=left+obj.width*(obj.mouth[0] if obj.facing>0 else 1-obj.mouth[0])
 
     def begin(self,kind,model,x,y,scale,limits):
         if self.activity and self.activity.kind==kind:
@@ -151,8 +214,9 @@ class SceneController:
         floor=y+286*scale
         l,t,r,b=limits
         if kind in {'food','water','snack'}:
-            # Keep an existing bowl where it was put, replenishing its contents.
-            if self.bowl is None or self.bowl.kind!=kind:
+            attr={'food':'feeder','water':'fountain','snack':'snack'}[kind]
+            obj=getattr(self,attr)
+            if obj is None:
                 bx=x+355*scale
                 facing=1
                 if bx>r+290*scale: bx=x-35*scale;facing=-1
@@ -161,14 +225,33 @@ class SceneController:
                     candidates=[]
                     left_bowl=prop.x-30*scale
                     right_bowl=prop.x+prop.width+50*scale
-                    if left_bowl-260*scale>=l:candidates.append((left_bowl,1,left_bowl-260*scale))
-                    if right_bowl-60*scale<=r:candidates.append((right_bowl,-1,right_bowl-60*scale))
+                    if left_bowl-286*scale>=l:candidates.append((left_bowl,1,left_bowl-286*scale))
+                    if right_bowl-34*scale<=r:candidates.append((right_bowl,-1,right_bowl-34*scale))
                     if candidates:
                         bx,facing,_=min(candidates,key=lambda c:abs(c[2]-x))
-                self.bowl=Bowl(clamp(bx,l+35*scale,r+285*scale),floor,kind,facing=facing)
-            else:
-                self.bowl.amount=1.
-            self.message='水碗放好啦' if kind=='water' else '食盆放好啦，悠米自己走过去'
+                # Leave the seated cat's space free and avoid other equipment.
+                for other in (self.feeder,self.fountain,self.snack):
+                    if other and abs(bx-other.x)<180*scale:bx=other.x+200*scale
+                layout=self.equipment_layout[{'food':'petkit-solo','water':'petkit-solo-se','snack':'fregate-treat'}[kind]]
+                height=layout['logical_height']
+                # Treat opening is raised to the same mouth level as drinking.
+                efloor=floor-(94-height*(1-layout['contact'][1]))*scale if kind=='snack' else floor
+                obj=Bowl(clamp(bx,l+80*scale,r+180*scale),max(efloor,t+height*scale),kind,
+                         amount=0. if kind=='food' else 1.,facing=facing,scale=scale,
+                         logical_height=height,aspect=layout['width']/layout['height'],mouth=tuple(layout['contact']))
+                if kind=='food':
+                    packet=self.equipment_layout['fregate-food']
+                    obj.logical_extra=height*.38*packet['width']/packet['height']+10
+                self._place_equipment(obj,bx,scale)
+                setattr(self,attr,obj)
+            self.bowl=obj
+            if kind=='food':
+                obj.dispense()
+                if obj.amount<=.01 and obj.dispensing<=0:
+                    self.cancel(model);self.message='粮仓空啦，右键喂食器补充弗列加特猫粮';return False
+            elif obj.amount<=.01:
+                self.cancel(model);self.message='请先右键续水' if kind=='water' else '猫条吃完啦，右键换一支';return False
+            self.message={'food':'SOLO 正在出粮，悠米会走到食盆前','water':'去 SOLO SE 喝水啦','snack':'尝一口弗列加特猫条'}[kind]
         elif kind=='ball':
             if self.ball is None:
                 bx=x+365*scale
@@ -211,6 +294,8 @@ class SceneController:
             self.ball.step(dt,l,r+320*scale)
         if self.scratcher:
             self.scratcher.step(dt)
+        for equipment in (self.feeder,self.fountain,self.snack):
+            if equipment:equipment.step(dt)
         self.destination=None
         self.pounce_velocity=0.
         if not self.activity:
@@ -233,9 +318,11 @@ class SceneController:
         kind=a.kind
         if kind in {'food','water','snack'}:
             obj=self.bowl
+            obj.facing=1 if obj.x-286*scale>=l else -1
             self.direction=obj.facing
-            offset=260 if self.direction>0 else 60
-            target=self._target(obj.x-offset*scale,obj.floor-286*scale)
+            offset=286 if self.direction>0 else 34
+            floor=obj.floor if kind!='snack' else obj.contact_y+94*scale
+            target=self._target(obj.x-offset*scale,floor-286*scale)
         elif kind=='ball':
             obj=self.ball
             self.direction=1 if obj.x>x+160*scale else -1
@@ -244,7 +331,7 @@ class SceneController:
         else:
             obj=self.scratcher
             # Prefer a side with room for the entire cat; turn toward the prop.
-            paw=282 if kind=='scratch' else 270
+            paw=276 if kind=='scratch' else 270
             left_x=obj.rope_left[0] if kind=='scratch' else obj.track_center[0]-obj.track_radius[0]
             right_x=obj.rope_right[0] if kind=='scratch' else obj.track_center[0]+obj.track_radius[0]
             left_target=obj.x+obj.width*left_x-paw*scale
@@ -256,6 +343,9 @@ class SceneController:
             self.destination=target
             if distance<4*scale:
                 self.destination=None
+                if kind=='food' and obj.dispensing>0:
+                    if model.action!='look':model.start('look')
+                    return
                 a.stage='interact';a.stage_time=0.;a.contact_cycle=-1
                 if kind in {'food','water','snack'}:
                     self.last_need=model.thirst if kind=='water' else model.satiety
@@ -266,10 +356,21 @@ class SceneController:
                 model.queue.clear();model.start('walk')
             return
         if kind in {'food','water','snack'}:
+            if distance>15*scale:
+                self._enter('approach',model,'walk');self.destination=target
+                return
             need=model.thirst if kind=='water' else model.satiety
             serving=45 if kind=='water' else 12 if kind=='snack' else 35
-            obj.amount=max(0.,obj.amount-max(0.,need-self.last_need)/serving)
+            intake=max(0.,need-self.last_need)
+            available=obj.amount*serving
+            if intake>available:
+                need-=intake-available
+                if kind=='water':model.thirst=need
+                else:model.satiety=need
+            obj.amount=max(0.,obj.amount-min(intake,available)/serving)
             self.last_need=need
+            if obj.amount<=.00001 and model.action in {'eat','drink','treat'}:
+                model.sequence(['lick','groom'] if kind=='food' else ['lick'])
             if model.action not in CARE_ACTIONS:
                 self.cancel()
             return

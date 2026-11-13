@@ -66,3 +66,7 @@ v1.3 场景预览可选安装 `imageio-ffmpeg` 后运行 `python tools/make_v13_
 源码、有效运行素材、角色源图和许可进入仓库。单文件 exe、预览和必要的测试记录可作为 GitHub Release 附件发布。个人存档、原始聊天附件、虚拟环境、日志和本机生成的 `.spec` 文件不应提交。
 
 历史版本必须保留，详见 [RELEASING.md](RELEASING.md)。
+
+## v1.4.0 设备素材
+
+使用 `python tools/prepare_v14_assets.py` 登记已生成的设备与互动源图，然后执行 `python tools/smooth_motion.py --states scratch eat sniff drink`。不要直接重跑旧版低位抓挠登记脚本覆盖新比例。`python tools/review_equipment.py` 生成实际渲染接触图；`python tools/make_v14_preview.py qa/v14-preview` 生成受控 64 FPS 时间线预览；`python tools/benchmark_scenes.py qa/scenes.json` 测六种原生场景。预览不是实时性能结果。产品来源见 PRODUCT-REFERENCES.md。

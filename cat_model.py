@@ -37,7 +37,7 @@ ACTIONS = {
     "wave": Action("喵，看看我", "wave", 4, 2),
     "sniff": Action("闻一闻", "sniff", 2, 2),
     "eat": Action("咔嚓咔嚓", "eat", 7, 3),
-    "treat": Action("小零食时间", "eat", 4, 3),
+    "treat": Action("小零食时间", "drink", 4, 3),
     "drink": Action("吨吨吨", "drink", 6, 3),
     "lick": Action("舔舔嘴", "lick", 2, 2),
     "groom": Action("洗脸理毛", "groom", 5, 3),

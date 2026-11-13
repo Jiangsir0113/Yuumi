@@ -1,0 +1,38 @@
+{
+  "petkit-solo": {
+    "width": 605,
+    "height": 768,
+    "logical_height": 215,
+    "contact": [
+      0.25,
+      0.82
+    ]
+  },
+  "petkit-solo-se": {
+    "width": 603,
+    "height": 768,
+    "logical_height": 120,
+    "contact": [
+      0.16,
+      0.23
+    ]
+  },
+  "fregate-food": {
+    "width": 543,
+    "height": 768,
+    "logical_height": 100,
+    "contact": [
+      0.5,
+      0.5
+    ]
+  },
+  "fregate-treat": {
+    "width": 768,
+    "height": 143,
+    "logical_height": 24,
+    "contact": [
+      0.015,
+      0.6
+    ]
+  }
+}

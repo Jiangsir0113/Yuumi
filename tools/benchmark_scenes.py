@@ -23,7 +23,7 @@ pet.model.settings.update({'roam':False,'hide_fullscreen':False,'quiet':False,'c
 pet.model.energy=85;pet.model.satiety=25
 monitor=PaintMonitor()
 results=[]
-actions=['scratch','track','ball','food']
+actions=['scratch','track','ball','food','water','snack']
 index=-1
 
 def next_scene():

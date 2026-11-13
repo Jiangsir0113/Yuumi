@@ -100,12 +100,12 @@
     "width": 320,
     "height": 260,
     "bounds": [
-      37,
-      75,
-      283,
+      31,
+      90,
+      289,
       250
     ],
-    "source_sheet": "v13-generated",
+    "source_sheet": "v14-equipment",
     "seconds": 2.0,
     "bridge": false
   },
@@ -114,12 +114,12 @@
     "width": 320,
     "height": 260,
     "bounds": [
-      37,
-      75,
-      283,
+      31,
+      90,
+      289,
       250
     ],
-    "source_sheet": "v13-generated",
+    "source_sheet": "v14-equipment",
     "seconds": 1.328,
     "bridge": false
   },
@@ -152,12 +152,12 @@
     "width": 320,
     "height": 260,
     "bounds": [
-      37,
-      75,
-      283,
+      35,
+      92,
+      285,
       250
     ],
-    "source_sheet": "v13-generated",
+    "source_sheet": "v14-equipment",
     "seconds": 1.328,
     "bridge": false
   },
@@ -330,12 +330,12 @@
     "width": 320,
     "height": 260,
     "bounds": [
-      26,
-      88,
-      294,
+      41,
+      37,
+      278,
       250
     ],
-    "source_sheet": "scratch-low",
+    "source_sheet": "v14-equipment",
     "seconds": 1.4,
     "bridge": false
   },
