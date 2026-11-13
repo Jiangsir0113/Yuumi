@@ -44,11 +44,14 @@ ACTIONS = {
     "crouch": Action("瞄准了…", "crouch", 3, 3),
     "pounce": Action("扑到啦", "pounce", .9, 5),
     "ball": Action("拍小球", "ball", 7, 3),
+    "scratch": Action("抓抓大蒜绳面", "scratch", 12, 4),
+    "track": Action("拨拨圆槽小球", "ball", 12, 3),
 }
 TOUCH_ACTIONS = {"head", "chin", "back", "cheek", "paw"}
 CARE_ACTIONS = {"sniff", "eat", "treat", "drink", "lick", "groom"}
 DEFAULT_SETTINGS = {"size": 1.0, "roam": True, "sound": False,
-                    "hide_fullscreen": True, "screen": 0, "name": "悠米"}
+                    "hide_fullscreen": True, "screen": 0, "name": "悠米",
+                    "quiet": False, "click_through": False}
 
 
 def clamp(value: float, low=0., high=100.) -> float:
@@ -71,6 +74,11 @@ class CatModel:
     settings: dict = field(default_factory=lambda: DEFAULT_SETTINGS.copy())
     rng: random.Random = field(default_factory=random.Random, repr=False)
     last_message: str = ""
+    preferences: dict = field(default_factory=lambda: {k: 0. for k in sorted(TOUCH_ACTIONS)})
+    recent: list[str] = field(default_factory=list)
+    curiosity: float = field(default_factory=lambda: random.uniform(.35,.85))
+    contact_age: float = 0.
+    active_contact: str | None = None
 
     @property
     def sleeping(self):
@@ -82,6 +90,8 @@ class CatModel:
         self.action = action
         self.elapsed = 0.
         self.remaining = ACTIONS[action].seconds if seconds is None else seconds
+        if not self.recent or self.recent[-1]!=action:
+            self.recent=(self.recent+[action])[-5:]
 
     def sequence(self, actions: list[str]):
         if not actions or any(x not in ACTIONS for x in actions):
@@ -105,7 +115,10 @@ class CatModel:
             self.sequence(["sniff", "eat", "lick", "groom"])
         elif action == "water":
             if self.action in {"sniff", "eat", "treat", "drink"}:
-                self.last_message = "等我喝完这一口～"
+                self.last_message = "等我吃喝完这一口～"
+                return False
+            if self.thirst>97:
+                self.last_message="水分很充足，等会儿再喝吧～"
                 return False
             self.sequence(["sniff", "drink", "lick"])
         elif action == "snack":
@@ -133,7 +146,7 @@ class CatModel:
     def touch(self, region: str, seconds: float = .2):
         if region not in TOUCH_ACTIONS:
             raise ValueError("Invalid touch region")
-        seconds = clamp(seconds, .05, .7)
+        seconds = clamp(seconds, 0., .7)
         if self.cooldown > 0:
             self.last_message = "给我一点点自己的时间～"
             if self.action != "refuse":
@@ -153,24 +166,59 @@ class CatModel:
         self.queue.clear()
         if self.action != region:
             self.start(region)
-        self.remaining = 3.5
+        self.remaining = max(self.remaining if self.action==region else 0, 1.2)
+        self.preferences[region]=min(3600.,self.preferences.get(region,0.)+seconds)
         return True
+
+    def contact(self, region: str, dt: float, speed: float = 0.):
+        """Integrate real contact time once per simulation step, never per event."""
+        if region not in TOUCH_ACTIONS or dt<=0:
+            return False
+        if self.active_contact!=region:
+            self.contact_age=0.
+            self.active_contact=region
+        self.contact_age+=dt
+        # A resting hand has a lower stimulus than fast rubbing, but still counts.
+        intensity=.28+min(1.35,max(0.,speed)/180.)
+        accepted=self.touch(region,min(.7,dt)*intensity)
+        if accepted:
+            self.remaining=max(self.remaining,.3)
+            if self.favorite_region==region:
+                self.happiness=clamp(self.happiness+dt*.25)
+        return accepted
+
+    def end_contact(self):
+        self.active_contact=None
+        self.contact_age=0.
+
+    @property
+    def favorite_region(self):
+        key=max(self.preferences,key=self.preferences.get)
+        return key if self.preferences[key]>=8 else None
 
     def autonomous(self):
         if self.energy < 22:
             self.sequence(["yawn", "loaf", "sleep"])
             return
         if self.cooldown > 0:
-            self.start("walk" if self.settings["roam"] else "loaf", 7)
+            self.start("walk" if self.settings["roam"] and not self.settings.get("quiet") else "loaf", 7)
             return
         choices = ["idle", "idle", "loaf", "look", "groom", "stretch"]
-        if self.settings["roam"]:
+        if self.settings.get("quiet"):
+            choices=["idle","idle","loaf","loaf","look","groom"]
+        if self.settings["roam"] and not self.settings.get("quiet"):
             choices += ["walk", "walk", "trot"]
-        if self.affinity > 45:
-            choices += ["wave", "nuzzle", "knead"]
+            choices += ["look","look"] if self.curiosity>.6 else ["idle","loaf"]
+        if self.affinity > 58:
+            choices += ["nuzzle"]
+        if self.affinity > 68:
+            choices += ["knead", "wave"]
         if self.satiety < 30:
             choices += ["wave"]
-        self.start(self.rng.choice(choices))
+        if self.thirst<30:
+            choices += ["look"]
+        varied=[x for x in choices if x not in self.recent[-2:]]
+        self.start(self.rng.choice(varied or choices))
 
     def complete(self):
         # Nutrition accrues only over actual consumed time in tick().
@@ -187,7 +235,7 @@ class CatModel:
         else:
             self.autonomous()
 
-    def tick(self, dt: float, touching: bool = False):
+    def tick(self, dt: float, touching: bool = False, executing: bool = True):
         if not math.isfinite(dt) or dt < 0:
             raise ValueError("Time delta must be finite and nonnegative")
         # Split large timer gaps into transitions without losing completed care.
@@ -195,10 +243,14 @@ class CatModel:
         self.satiety = clamp(self.satiety - dt * .022)
         self.thirst = clamp(self.thirst - dt * .018)
         self.happiness = clamp(self.happiness - dt * .003)
-        self.energy = clamp(self.energy + dt * (.23 if self.sleeping else -.008))
-        self.cooldown = max(0., self.cooldown - dt)
+        self.energy = clamp(self.energy + dt * (.23 if self.sleeping and executing else -.008))
+        if not touching:
+            self.cooldown = max(0., self.cooldown - dt)
         if not touching:
             self.touch_load = max(0., self.touch_load - dt * 1.8)
+            self.end_contact()
+        if not executing:
+            return
         budget = dt
         for _ in range(150):
             if touching and self.action in TOUCH_ACTIONS and self.cooldown<=0:
@@ -234,9 +286,9 @@ class CatModel:
         return "在你身边就很安心"
 
     def serialize(self):
-        return {"version": 1, "needs": {k: getattr(self, k) for k in
+        return {"version": 2, "needs": {k: getattr(self, k) for k in
                 ("satiety", "thirst", "energy", "happiness", "affinity")},
-                "settings": self.settings}
+                "settings": self.settings,"preferences":self.preferences,"curiosity":self.curiosity}
 
     @classmethod
     def load(cls, path: Path):
@@ -249,7 +301,7 @@ class CatModel:
                     setattr(model, k, clamp(val))
             settings = data.get("settings", {})
             if isinstance(settings, dict):
-                for k in ("roam", "sound", "hide_fullscreen"):
+                for k in ("roam", "sound", "hide_fullscreen", "quiet", "click_through"):
                     if type(settings.get(k)) is bool:
                         model.settings[k] = settings[k]
                 size = settings.get("size")
@@ -264,6 +316,12 @@ class CatModel:
                 pos = settings.get("position")
                 if isinstance(pos, list) and len(pos) == 2 and all(type(x) is int for x in pos):
                     model.settings["position"] = pos
+            for key,value in data.get("preferences",{}).items():
+                if key in TOUCH_ACTIONS and isinstance(value,(int,float)) and math.isfinite(value):
+                    model.preferences[key]=clamp(value,0,3600)
+            curiosity=data.get("curiosity")
+            if isinstance(curiosity,(int,float)) and math.isfinite(curiosity):
+                model.curiosity=clamp(curiosity,.2,.9)
         except (OSError, ValueError, TypeError, AttributeError):
             pass  # A missing/corrupt save never prevents the cat from opening.
         return model

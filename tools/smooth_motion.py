@@ -1,6 +1,6 @@
 """Build motion-compensated 64fps WebP animations from approved sprite pixels.
 
-Offline only. OpenCV and NumPy are never imported by the desktop executable.
+Offline asset encoding. Runtime playback is implemented in animation_engine.py.
 """
 from pathlib import Path
 import hashlib
@@ -128,7 +128,8 @@ def main():
         for col,frame in enumerate(frames):
             sheet.paste(frame,(col*320,row*290),frame.getchannel("A"))
             draw.text((col*320+10,row*290+265),f"{name}: {col*25}%",font=font,fill="#72583c")
-    sheet.save(ROOT/"qa"/("motion-between-review-"+"-".join(args.states)+".jpg" if args.states else "motion-between-review.jpg"),quality=92)
+    if review:
+        sheet.save(ROOT/"qa"/("motion-between-review-"+"-".join(args.states)+".jpg" if args.states else "motion-between-review.jpg"),quality=92)
     print("MOTION_READY",sum(v["output_frames"] for v in report["states"].values()),flush=True)
 
 

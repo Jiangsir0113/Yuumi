@@ -96,28 +96,32 @@
     "source_sheet": "touch"
   },
   "sniff": {
-    "frames": 6,
+    "frames": 4,
     "width": 320,
     "height": 260,
     "bounds": [
-      66,
-      41,
-      252,
-      249
+      37,
+      75,
+      283,
+      250
     ],
-    "source_sheet": "sniff_detail"
+    "source_sheet": "v13-generated",
+    "seconds": 2.0,
+    "bridge": false
   },
   "eat": {
     "frames": 4,
     "width": 320,
     "height": 260,
     "bounds": [
-      64,
-      43,
-      255,
-      249
+      37,
+      75,
+      283,
+      250
     ],
-    "source_sheet": "care"
+    "source_sheet": "v13-generated",
+    "seconds": 1.328,
+    "bridge": false
   },
   "lick": {
     "frames": 6,
@@ -148,12 +152,14 @@
     "width": 320,
     "height": 260,
     "bounds": [
-      72,
-      80,
-      247,
-      249
+      37,
+      75,
+      283,
+      250
     ],
-    "source_sheet": "care_detail"
+    "source_sheet": "v13-generated",
+    "seconds": 1.328,
+    "bridge": false
   },
   "refuse": {
     "frames": 4,
@@ -232,12 +238,14 @@
     "width": 320,
     "height": 260,
     "bounds": [
-      61,
-      46,
-      259,
-      249
+      66,
+      45,
+      254,
+      250
     ],
-    "source_sheet": "play"
+    "source_sheet": "v13-generated",
+    "seconds": 1.328,
+    "bridge": false
   },
   "stretch": {
     "frames": 4,
@@ -316,5 +324,33 @@
     "source_sheet": "bridge_loaf_sleep",
     "bridge": true,
     "seconds": 0.46
+  },
+  "scratch": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      41,
+      37,
+      278,
+      250
+    ],
+    "source_sheet": "v13-generated",
+    "seconds": 1.4,
+    "bridge": false
+  },
+  "bridge_stand_turn": {
+    "frames": 4,
+    "width": 320,
+    "height": 260,
+    "bounds": [
+      56,
+      77,
+      262,
+      249
+    ],
+    "source_sheet": "v13-generated",
+    "seconds": 0.46,
+    "bridge": true
   }
 }

@@ -36,11 +36,13 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QFra
 
 from cat_model import ACTIONS, CARE_ACTIONS, CatModel, TOUCH_ACTIONS
 from animation_engine import Animator, qimage
+from scene_model import SceneController
+from scene_view import SceneView
 diagnostic("Qt modules imported")
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 ASSETS = ROOT / "assets"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 
 def state_path():
@@ -96,7 +98,7 @@ class CarePanel(QDialog):
     def __init__(self, pet):
         super().__init__(None, Qt.WindowType.Window)
         self.pet = pet
-        self.setWindowTitle("悠米 1.2 · 陪伴小屋")
+        self.setWindowTitle("悠米 1.3 · 陪伴小屋")
         self.setWindowIcon(pet.windowIcon())
         self.setMinimumWidth(440)
         self.resize(460, 610)
@@ -115,7 +117,7 @@ class CarePanel(QDialog):
         root.addWidget(self.status)
         row = QHBoxLayout()
         self.bars = {}
-        for key, label in [("satiety", "饱饱"), ("energy", "精神"), ("happiness", "开心"), ("affinity", "熟悉")]:
+        for key, label in [("satiety", "饱饱"), ("thirst", "水分"), ("energy", "精神"), ("happiness", "开心"), ("affinity", "熟悉")]:
             col = QVBoxLayout()
             col.addWidget(QLabel(label))
             bar = QProgressBar()
@@ -136,15 +138,18 @@ class CarePanel(QDialog):
             "也可以直接在猫咪身上按住左键轻轻移动。\n摸久了会想休息，给它一点自己的时间。")
         self.add_actions("照顾", [("food", "喂猫粮", "闻一闻、吃粮、舔嘴、洗脸"),
             ("snack", "小零食", "奖励一点点，饱了就不吃啦"), ("water", "喝点水", "补充水分"),
-            ("sleep", "哄它睡觉", "打哈欠、揣手、蜷起来睡"), ("wake", "轻轻叫醒", "醒来伸懒腰"),
+            ("sleep", "哄它睡觉", "从当前姿势安稳蜷起来"), ("wake", "轻轻叫醒", "睁眼，回到放松姿势"),
             ("groom", "洗脸理毛", "爱干净的小猫"), ("loaf", "揣手手", "安安静静陪你")],
             "离线不扣照顾分，也不会因为忘记喂食生病。\n吃喝过程中再点喂食，不会重复加饱腹。")
         self.add_actions("玩耍", [("toy", "逗猫棒", "鼠标靠近猫咪，它会伏低再扑抓"),
             ("ball", "拍小球", "玩一会儿，再洗洗脸"), ("wave", "叫叫它", "抬起小爪打招呼"),
             ("idle", "安静陪我", "回到放松的姿势"), ("stretch", "伸懒腰", "从前爪伸到小尾巴"),
             ("look", "看看四周", "好奇地左看右看"), ("walk", "散个步", "慢慢逛一会儿"),
-            ("trot", "小跑一下", "精神满满")],
-            "逗猫棒模式：关闭小屋，把鼠标放在猫咪附近。\n右键或按 Esc 可以结束。小球会自己滚动。")
+            ("trot", "小跑一下", "精神满满"), ("scratch", "大蒜抓抓板", "抓白色绳面，活动前爪"),
+            ("track", "拨圆槽小球", "小球沿底盘圆槽滚动、碰撞、减速"),
+            ("stop", "结束互动", "道具留在原地，悠米先休息"),
+            ("put_away", "收起道具", "收起食盆、小球和猫抓板")],
+            "道具可拖动搬家。点猫抓板上部抓绳，点底盘拨球。\n互动时用桌面上的“结束”按钮或右键菜单停止。")
         self.add_settings()
         footer = QLabel("左键轻揉 · Alt + 拖动搬家 · 右键打开菜单")
         footer.setObjectName("status")
@@ -181,7 +186,7 @@ class CarePanel(QDialog):
     def perform(self, action):
         self.pet.perform(action)
         self.refresh()
-        if action in {"toy", "ball"}:
+        if action in {"toy", "ball", "scratch", "track"}:
             self.hide()
 
     def add_settings(self):
@@ -206,11 +211,14 @@ class CarePanel(QDialog):
         self.screen_combo.setCurrentIndex(self.pet.screen_index())
         self.screen_combo.currentIndexChanged.connect(self.pet.change_screen)
         col.addWidget(self.screen_combo)
-        for key, text in [("roam", "允许自己漫步"), ("sound", "轻柔呼噜声（合成音效）"),
+        self.setting_checks={}
+        for key, text in [("roam", "允许自己漫步"), ("quiet", "安静陪伴（暂停自主漫步和道具显示）"),
+                          ("click_through", "鼠标穿透（从托盘恢复交互）"), ("sound", "轻柔呼噜声（合成音效）"),
                           ("hide_fullscreen", "全屏应用时自动隐藏")]:
             cb = QCheckBox(text)
             cb.setChecked(self.pet.model.settings[key])
             cb.toggled.connect(lambda checked, k=key: self.pet.setting(k, checked))
+            self.setting_checks[key]=cb
             col.addWidget(cb)
         reset = QPushButton("把猫咪叫回屏幕中间")
         reset.clicked.connect(self.pet.recover)
@@ -236,8 +244,14 @@ class CarePanel(QDialog):
     def refresh(self):
         self.title.setText(self.pet.model.settings["name"] + "的陪伴小屋")
         self.status.setText(self.pet.model.status())
+        favorite=self.pet.model.favorite_region
+        if favorite:
+            self.status.setText(self.status.text()+" · 最喜欢"+{"head":"摸头","chin":"挠下巴","back":"顺毛","cheek":"揉脸","paw":"碰爪"}[favorite])
         for key, bar in self.bars.items():
             bar.setValue(round(getattr(self.pet.model, key)))
+        for key,box in getattr(self,"setting_checks",{}).items():
+            if box.isChecked()!=self.pet.model.settings[key]:
+                box.blockSignals(True);box.setChecked(self.pet.model.settings[key]);box.blockSignals(False)
 
 
 class SourceFrames:
@@ -281,6 +295,7 @@ class CatWindow(QWidget):
         self.paint_times=deque(maxlen=24000)
         self.direction = 1
         self.velocity = 0.
+        self.velocity_y=0.
         self.pos_float = QPointF()
         self.pressed = False
         self.dragging = False
@@ -289,6 +304,12 @@ class CatWindow(QWidget):
         self.press_global = QPoint()
         self.last_touch_point = QPoint()
         self.last_touch_time = 0.
+        self.gesture_id=0
+        self.contact_active=False
+        self.contact_region=None
+        self.stroke_speed=0.
+        self.candidate_region=None
+        self.candidate_time=0.
         self.last_action = self.model.action
         self.last_clock = time.monotonic()
         self.menu_open = False
@@ -306,6 +327,8 @@ class CatWindow(QWidget):
         self.ball_target = None
         self.ball_deadline = 0.
         self.panel = None
+        self.scene=SceneController()
+        self.scene_view=SceneView(self,ASSETS)
         self.resize(round(320*self.scale), round(307*self.scale))
         self.recover(restore=True)
         self.sound = QSoundEffect(self)
@@ -324,6 +347,9 @@ class CatWindow(QWidget):
         if not testing:
             self.fullscreen_timer.start(1200)
         QApplication.instance().screenRemoved.connect(lambda *_: self.recover())
+        if self.model.settings.get("click_through"):
+            self.setWindowFlag(Qt.WindowType.WindowTransparentForInput,True)
+            self.show()
 
     def screen_index(self):
         return min(self.model.settings["screen"], max(0, len(QApplication.screens())-1))
@@ -345,6 +371,8 @@ class CatWindow(QWidget):
         self.pos_float = QPointF(pos)
 
     def recover(self, restore=False):
+        if not restore and self.model.settings.get("click_through"):
+            self.setting("click_through",False)
         rect = self.available_rect()
         saved = self.model.settings.get("position")
         point = QPoint(*saved) if restore and saved else QPoint(rect.center().x()-self.width()//2, rect.bottom()-self.height()+1)
@@ -362,6 +390,12 @@ class CatWindow(QWidget):
         menu.addAction("打开陪伴小屋", self.open_panel)
         menu.addAction("把猫咪叫回来", self.recover)
         menu.addAction("显示 / 隐藏猫咪", self.toggle_visible)
+        self.through_action=menu.addAction("鼠标穿透（点击取消）")
+        self.through_action.setCheckable(True)
+        self.through_action.setChecked(self.model.settings.get("click_through",False))
+        self.through_action.toggled.connect(lambda val:self.setting("click_through",val))
+        menu.addAction("结束当前互动",lambda:self.perform("stop"))
+        menu.addAction("收起所有道具",lambda:self.perform("put_away"))
         menu.addSeparator()
         menu.addAction("退出悠米", self.quit_app)
         self.tray.setContextMenu(menu)
@@ -382,6 +416,8 @@ class CatWindow(QWidget):
             self.stop_toy()
         elif not self.fullscreen_hidden:
             self.show()
+        self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
+        self.timer.setInterval(8 if self.isVisible() else 250)
 
     def check_fullscreen(self):
         handles = [int(self.winId())]
@@ -393,6 +429,8 @@ class CatWindow(QWidget):
             if hidden:
                 self.stop_toy()
             self.hide() if hidden or self.manual_hidden else self.show()
+            self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
+            self.timer.setInterval(8 if self.isVisible() else 250)
 
     def setting(self, key, val):
         self.model.settings[key] = val
@@ -402,9 +440,23 @@ class CatWindow(QWidget):
             self.sound.stop()
         if key == "hide_fullscreen":
             self.check_fullscreen()
+        if key=="click_through":
+            visible=self.isVisible()
+            self.setWindowFlag(Qt.WindowType.WindowTransparentForInput,bool(val))
+            if visible:self.show()
+            if hasattr(self,"through_action"):
+                self.through_action.blockSignals(True)
+                self.through_action.setChecked(bool(val))
+                self.through_action.blockSignals(False)
+            self.end_gesture()
+        if key=="quiet" and val:
+            self.scene.cancel(self.model)
+            self.model.start("loaf")
+        self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
         self.save()
 
     def change_screen(self, index):
+        self.scene.put_away()
         self.model.settings["screen"] = max(0, index)
         self.recover()
         self.save()
@@ -414,6 +466,8 @@ class CatWindow(QWidget):
         self.scale = max(.65, min(1.5, scale))
         self.model.settings["size"] = self.scale
         self.resize(round(320*self.scale), round(307*self.scale))
+        if self.scene.scratcher:self.scene.scratcher.scale=self.scale
+        if self.scene.ball:self.scene.ball.radius=12*self.scale
         self.move_safe(QPoint(self.x(), baseline-self.height()))
         self.save()
 
@@ -432,53 +486,37 @@ class CatWindow(QWidget):
 
     def perform(self, action):
         self.urgent_animation=True
-        self.care_pending = None
-        self.care_target = None
-        self.model.last_message = ""
-        if self.toy_ball:
-            self.toy_ball.close()
-            self.toy_ball = None
-            self.ball_target = None
-        if action == "toy":
-            self.toy_mode = True
-            self.toy_until = time.monotonic()+60
-            self.model.request("crouch")
-            self.say("逗猫棒来啦，把鼠标放在我附近", 7)
+        self.end_gesture()
+        self.model.last_message=""
+        if action in {"food","water","snack","toy","ball","scratch","track"}:
+            if self.model.settings.get("quiet"):
+                self.setting("quiet",False)
+            kind="wand" if action=="toy" else action
+            self.scene.begin(kind,self.model,self.x(),self.y(),self.scale,self.scene_limits())
+            self.toy_mode=kind=="wand"
+            self.say(self.scene.message,6)
+            self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
+            self.toy_ball=self.scene_view.windows.get("ball")
+            a=self.scene.activity
+            self.care_pending=a.kind if a and a.kind in {"food","water","snack"} and a.stage=="approach" else None
             return
-        self.toy_mode = False
-        if action == "ball":
-            self.toy_ball = ToyBall(self)
-            self.ball_target = self.toy_ball.x()-self.width()//2
-            self.ball_deadline = time.monotonic()+5
-            self.direction = 1 if self.ball_target>self.x() else -1
-            self.model.request("walk")
-            self.say("小球滚过来啦，去拍拍它")
+        if action in {"stop","put_away"}:
+            self.scene.put_away(self.model) if action=="put_away" else self.scene.cancel(self.model)
+            self.toy_mode=False
+            self.say("道具收好啦" if action=="put_away" else "先歇一会儿，想玩时再叫我")
+            self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
             return
-        # A bowl is set down one short walk away, then sniff/eat/groom follows.
-        if action in {"food", "water", "snack"} and self.model.action not in {"sniff", "eat", "drink", "treat"}:
-            if (action in {"food", "snack"} and self.model.satiety > 96) or self.model.sleeping:
-                accepted = self.model.request(action)
-            else:
-                target = self.clamp_position(QPoint(self.x()+round(85*self.scale), self.y()))
-                if abs(target.x()-self.x()) < 25:
-                    target = self.clamp_position(QPoint(self.x()-round(85*self.scale), self.y()))
-                if abs(target.x()-self.x()) > 15:
-                    self.care_pending = action
-                    self.care_target = target.x()
-                    self.direction = 1 if target.x() > self.x() else -1
-                    self.care_deadline = time.monotonic()+7
-                    self.model.request("walk")
-                    accepted = True
-                else:
-                    accepted = self.model.request(action)
-        else:
-            accepted = self.model.request(action)
-        msg = self.model.last_message or ("开饭啦，先闻一闻" if action in {"food", "snack"} and accepted else
-                "水碗放好啦" if action == "water" and accepted else ACTIONS[self.model.action].label)
-        self.say(msg)
+        self.scene.cancel()
+        self.toy_mode=False
+        accepted=self.model.request(action)
+        self.say(self.model.last_message or ACTIONS[self.model.action].label)
         if accepted and action in TOUCH_ACTIONS:
             self.purr()
         self.update()
+
+    def scene_limits(self):
+        rect=self.available_rect()
+        return (rect.left(),rect.top(),rect.right()-self.width()+1,rect.bottom()-self.height()+1)
 
     def purr(self):
         if self.model.settings["sound"] and not self.sound.isPlaying():
@@ -500,57 +538,79 @@ class CatWindow(QWidget):
         now = time.monotonic()
         dt = min(now-self.last_clock, .25)
         self.last_clock = now
+        visible=self.isVisible() and not self.manual_hidden and not self.fullscreen_hidden
+        self.timer.setInterval(8 if visible else 250)
         if not self.menu_open and not self.dragging:
-            self.model.tick(dt, touching=self.pressed)
+            if self.contact_active and self.contact_region:
+                age=now-self.last_touch_time
+                speed=self.stroke_speed*math.exp(-max(0.,age-.04)/.15)
+                self.model.contact(self.contact_region,dt,speed/self.scale)
+            if visible:
+                cursor=QCursor.pos()
+                self.scene.update(dt,self.model,self.x(),self.y(),self.scale,
+                                  self.animator.execution_ready and self.animator.action==self.model.action,
+                                  self.animator.phase,(cursor.x(),cursor.y()),self.scene_limits())
+                if self.scene.activity:
+                    self.direction=self.scene.direction
+                    if self.scene.destination and self.model.action in {"walk","trot"}:
+                        dx=self.scene.destination[0]-self.x()
+                        if abs(dx)>2:self.direction=1 if dx>0 else -1
+            self.animator.request(self.model.action,self.direction,self.urgent_animation)
+            self.model.tick(dt,touching=self.contact_active,
+                            executing=self.animator.execution_ready if visible else True)
         if self.model.action != self.last_action:
             prior=self.last_action
             self.last_action = self.model.action
-            if self.model.action in {"walk", "trot"} and prior not in {"walk","trot"} and not self.care_pending and self.ball_target is None:
+            if self.model.action in {"walk", "trot"} and prior not in {"walk","trot"} and self.scene.activity is None:
                 self.direction = self.model.rng.choice([-1, 1])
             if self.model.action == "refuse":
                 self.say("先歇一会儿，我一会儿再来找你")
             if self.model.action in {"nuzzle", "knead"}:
                 self.purr()
-        self.sync_animation(dt if not self.dragging else 0)
+        if not visible:
+            self.scene_view.sync(False)
+            return
+        self.sync_animation(dt if not (self.dragging or self.menu_open) else 0)
         target_velocity=0.
+        target_y=0.
         if self.model.action in {"walk","trot"} and not (self.pressed or self.menu_open or self.dragging):
-            if self.care_pending or self.ball_target is not None or self.model.settings["roam"]:
-                target_velocity=self.direction*(95 if self.model.action=="trot" else 34)*self.scale*self.animator.locomotion_weight
-        if self.model.action=="pounce" and self.toy_mode and self.animator.graph.ready:
-            target_velocity=self.direction*45*self.scale
+            speed=(95 if self.model.action=="trot" else 44)*self.scale*self.animator.locomotion_weight
+            if self.scene.destination:
+                dx=self.scene.destination[0]-self.pos_float.x()
+                dy=self.scene.destination[1]-self.pos_float.y()
+                distance=math.hypot(dx,dy)
+                factor=min(speed,distance*5)/max(.001,distance)
+                target_velocity=dx*factor;target_y=dy*factor
+            elif self.model.settings["roam"] and not self.model.settings.get("quiet"):
+                l,_,r,_=self.scene_limits()
+                distance=r-self.x() if self.direction>0 else self.x()-l
+                if distance<2 and abs(self.velocity)<8 and self.animator.graph.ready:
+                    self.direction*=-1
+                    self.animator.request(self.model.action,self.direction,True)
+                    self.velocity=0.
+                target_velocity=self.direction*speed*min(1.,max(.06,distance/20))
+        if self.model.action=="pounce" and self.animator.graph.ready:
+            target_velocity=self.scene.pounce_velocity
         self.velocity+=(target_velocity-self.velocity)*(1-math.exp(-dt/.08))
+        self.velocity_y+=(target_y-self.velocity_y)*(1-math.exp(-dt/.08))
         if self.dragging or self.pressed:
-            self.velocity=0.
-        if abs(self.velocity)>.05:
+            self.velocity=self.velocity_y=0.
+        if abs(self.velocity)>.05 or abs(self.velocity_y)>.05:
             x=self.pos_float.x()+self.velocity*dt
-            candidate=self.clamp_position(QPoint(round(x),self.y()))
+            y=self.pos_float.y()+self.velocity_y*dt
+            candidate=self.clamp_position(QPoint(round(x),round(y)))
             if candidate.x()!=round(x) and self.velocity*self.direction>0:
-                self.direction*=-1
+                self.velocity=0.
+                if self.scene.activity is None:self.direction*=-1
             self.move(candidate)
-            self.pos_float=QPointF(x if candidate.x()==round(x) else candidate.x(),candidate.y())
-        if self.ball_target is not None:
-            if abs(self.x()-self.ball_target)<25 or now>self.ball_deadline:
-                self.toy_ball.close()
-                self.toy_ball = None
-                self.ball_target = None
-                self.direction = 1
-                self.model.request("ball")
-        if self.care_pending and (abs(self.x()-self.care_target)<5 or now>self.care_deadline):
-            action, self.care_pending, self.care_target = self.care_pending, None, None
-            self.direction = 1
-            self.model.request(action)
-        if self.toy_mode:
-            if now > self.toy_until:
-                self.stop_toy()
-            else:
-                cursor = self.mapFromGlobal(QCursor.pos())
-                near = -120 < cursor.x() < self.width()+120 and 20 < cursor.y() < self.height()+120
-                if near and not self.pressed and self.model.action not in {"crouch", "pounce"}:
-                    self.model.request("crouch")
-                if near and self.model.action == "crouch" and self.model.elapsed > 1.6:
-                    self.direction = 1 if cursor.x() > self.width()/2 else -1
-                    self.model.sequence(["pounce", "idle"])
-                    self.model.happiness = min(100., self.model.happiness+1)
+            self.pos_float=QPointF(x if candidate.x()==round(x) else candidate.x(),y if candidate.y()==round(y) else candidate.y())
+        a=self.scene.activity
+        self.toy_mode=bool(a and a.kind=="wand")
+        self.care_pending=a.kind if a and a.kind in {"food","water","snack"} and a.stage=="approach" else None
+        self.care_target=self.scene.destination[0] if self.care_pending and self.scene.destination else None
+        self.ball_target=self.scene.ball.x if a and a.kind=="ball" and self.scene.ball else None
+        self.scene_view.sync(not self.model.settings.get("quiet"))
+        self.toy_ball=self.scene_view.windows.get("ball")
         self.update()
 
     def paintEvent(self, event):
@@ -576,10 +636,6 @@ class CatWindow(QWidget):
             p.drawLine(tip+QPointF(18,-25), tip+QPointF(10,-9))
             p.setPen(QPen(QColor("#ce8975"), 4, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.drawLine(tip+QPointF(10,-9), tip)
-        if self.care_pending:
-            p.setPen(QPen(QColor("#c2a27b"), 2))
-            p.setBrush(QColor("#eee0c5"))
-            p.drawRoundedRect(QRectF(258, 269, 32, 12), 5, 5)
         visible_bubble = self.hovered or time.monotonic()<self.bubble_until
         if visible_bubble:
             message = self.bubble if time.monotonic()<self.bubble_until else f"{self.model.settings['name']} · {ACTIONS[action].label}"
@@ -594,51 +650,60 @@ class CatWindow(QWidget):
         p.end()
 
     def region_at(self, point):
-        sprite = ACTIONS[self.model.action].sprite
-        box = self.bounds[sprite]
-        local = QPointF(point.x()/self.scale, point.y()/self.scale-36)
-        ratio = (local.y()-box.top())/max(1,box.height())
-        if ratio < .27:
-            return "head"
-        if ratio < .39:
-            horizontal = (local.x()-box.left())/max(1,box.width())
-            return "cheek" if horizontal < .25 or horizontal > .75 else "chin"
-        if ratio < .68:
-            return "back"
-        if ratio < .83:
-            return "back"
-        return "paw"
+        self.frame()
+        return self.animator.hit_test(point.x()/self.scale,point.y()/self.scale-36)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
-            self.stop_toy()
+            self.end_gesture()
             self.context_menu(event.globalPosition().toPoint())
             return
         if event.button() == Qt.MouseButton.LeftButton:
-            self.urgent_animation=True
-            self.toy_mode=False
-            if self.toy_ball:
-                self.toy_ball.close()
-                self.toy_ball=None
-            self.ball_target=None
-            self.care_pending=None
-            self.care_target=None
+            self.gesture_id+=1
+            generation=self.gesture_id
             self.pressed = True
+            self.contact_active=False
             self.press_global = event.globalPosition().toPoint()
             self.drag_offset = self.press_global-self.pos()
             self.last_touch_point = self.press_global
             self.last_touch_time = time.monotonic()
+            self.press_region=self.region_at(event.position())
+            self.stroke_speed=0.
             self.dragging = bool(event.modifiers() & Qt.KeyboardModifier.AltModifier) or self.drag_ready
             self.drag_ready = False
-            self.care_pending = None
             if self.dragging:
+                self.scene.cancel()
                 self.setCursor(Qt.CursorShape.ClosedHandCursor)
             else:
-                self.model.last_message = ""
-                accepted = self.model.touch(self.region_at(event.position()), .4)
-                self.say(self.model.last_message or ACTIONS[self.model.action].label)
-                if accepted:
-                    self.purr()
+                def held():
+                    if self.pressed and self.gesture_id==generation and not self.contact_active:
+                        self.activate_contact(self.press_region)
+                QTimer.singleShot(QApplication.doubleClickInterval()+10,held)
+
+    def activate_contact(self,region):
+        if region is None:return
+        self.scene.cancel()
+        self.toy_mode=False
+        self.care_pending=self.care_target=self.ball_target=None
+        self.urgent_animation=True
+        self.contact_active=True
+        self.contact_region=region
+        self.candidate_region=region
+        self.candidate_time=time.monotonic()
+        self.model.last_message=""
+        accepted=self.model.touch(region,0.)
+        self.say(self.model.last_message or ACTIONS[self.model.action].label)
+        if accepted:self.purr()
+
+    def end_gesture(self):
+        self.gesture_id+=1
+        self.pressed=False
+        self.dragging=False
+        self.contact_active=False
+        self.contact_region=None
+        self.press_region=None
+        self.model.end_contact()
+        self.unsetCursor()
 
     def mouseMoveEvent(self, event):
         if not self.pressed:
@@ -647,27 +712,43 @@ class CatWindow(QWidget):
         if self.dragging:
             self.move_safe(point-self.drag_offset)
             return
-        if (point-self.last_touch_point).manhattanLength() > 3:
-            self.urgent_animation=True
+        if (point-self.press_global).manhattanLength()>4:
+            region=self.region_at(event.position())
+            if not self.contact_active:
+                self.activate_contact(region)
             now = time.monotonic()
-            accepted = self.model.touch(self.region_at(event.position()), min(.35, now-self.last_touch_time))
+            elapsed=max(.001,now-self.last_touch_time)
+            speed=math.hypot(point.x()-self.last_touch_point.x(),point.y()-self.last_touch_point.y())/elapsed
+            self.stroke_speed+=(min(2000.,speed)-self.stroke_speed)*(1-math.exp(-elapsed/.05))
+            if region and region!=self.candidate_region:
+                self.candidate_region=region;self.candidate_time=now
+            if region and now-self.candidate_time>=.08:
+                self.contact_region=region
             self.last_touch_point, self.last_touch_time = point, now
-            if not accepted and self.model.last_message:
-                self.say(self.model.last_message)
-            elif accepted:
-                self.purr()
 
     def mouseReleaseEvent(self, event):
-        self.pressed = False
-        if self.dragging:
-            self.dragging = False
+        dragging=self.dragging
+        active=self.contact_active
+        region=getattr(self,"press_region",None)
+        self.end_gesture()
+        if dragging:
             self.model.request("idle")
             self.say("这里也很舒服～")
             self.save()
-        self.unsetCursor()
+        elif not active and region is not None:
+            generation=self.gesture_id
+            def tap():
+                if generation!=self.gesture_id:return
+                self.scene.cancel()
+                self.urgent_animation=True
+                self.model.last_message=""
+                accepted=self.model.touch(region,.12)
+                self.say(self.model.last_message or ACTIONS[self.model.action].label)
+                if accepted:self.purr()
+            QTimer.singleShot(QApplication.doubleClickInterval()+10,tap)
 
     def mouseDoubleClickEvent(self, event):
-        self.pressed = False
+        self.end_gesture()
         self.open_panel()
 
     def enterEvent(self, event):
@@ -682,14 +763,10 @@ class CatWindow(QWidget):
             self.stop_toy()
 
     def stop_toy(self):
-        if self.toy_ball:
-            self.toy_ball.close()
-            self.toy_ball = None
-            self.ball_target = None
-        if self.toy_mode:
-            self.toy_mode = False
-            self.model.request("idle")
-            self.say("玩够啦，休息一会儿")
+        if self.scene.activity:
+            self.scene.cancel(self.model)
+        self.toy_mode=False
+        self.ball_target=self.care_pending=self.care_target=None
 
     def open_panel(self):
         if self.panel is None:
@@ -716,7 +793,9 @@ class CatWindow(QWidget):
         menu.addAction("打开陪伴小屋…", self.open_panel)
         menu.addSeparator()
         for label, key in [("喂猫粮", "food"), ("喝点水", "water"), ("摸摸头", "head"),
-                           ("逗猫棒", "toy"), ("哄它睡觉", "sleep"), ("轻轻叫醒", "wake")]:
+                           ("逗猫棒", "toy"), ("大蒜抓抓板", "scratch"), ("拨圆槽小球", "track"),
+                           ("结束互动", "stop"), ("收起道具", "put_away"),
+                           ("哄它睡觉", "sleep"), ("轻轻叫醒", "wake")]:
             menu.addAction(label, lambda k=key: self.perform(k))
         menu.addSeparator()
         roam = menu.addAction("允许自己漫步")
@@ -741,60 +820,18 @@ class CatWindow(QWidget):
 
     def closeEvent(self, event):
         self.save()
+        self.scene_view.close()
+        self.timer.stop()
+        self.save_timer.stop()
+        self.animator.close()
         event.accept()
 
     def quit_app(self):
         self.save()
         self.animator.close()
+        self.scene_view.close()
         self.tray.hide()
         QApplication.instance().quit()
-
-
-class ToyBall(QWidget):
-    """A small native toy control rolls toward the cat before its batting loop."""
-    def __init__(self, cat):
-        super().__init__(None, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
-        self.cat = cat
-        self.setWindowTitle("悠米的小球")
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.resize(44,44)
-        rect = cat.available_rect()
-        x = cat.x()+cat.width()//2+150
-        if x+44>rect.right():
-            x = cat.x()+cat.width()//2-150
-        self.move(max(rect.left(), min(x,rect.right()-44)), cat.y()+cat.height()-63)
-        self.phase = 0.
-        self.origin = self.x()
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.roll)
-        self.timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.timer.start(8)
-        self.show()
-
-    def roll(self):
-        self.phase += .034
-        # Gentle visible roll, no desktop input or changes to other windows.
-        toward = -1 if self.origin>self.cat.x()+self.cat.width()//2 else 1
-        self.move(round(self.origin+toward*min(35,self.phase*10)), self.y())
-        self.update()
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.translate(22,22)
-        p.rotate(self.phase*55)
-        p.setPen(QPen(QColor("#b9926c"),1.2))
-        p.setBrush(QColor("#efc4a8"))
-        p.drawEllipse(QRectF(-17,-17,34,34))
-        p.setPen(QPen(QColor("#fff2d6"),7))
-        p.drawArc(QRectF(-12,-16,24,32), 90*16,180*16)
-        p.end()
-
-    def closeEvent(self,event):
-        self.timer.stop()
-        event.accept()
 
 
 def executable_self_test(pet, output):
@@ -833,12 +870,28 @@ def executable_self_test(pet, output):
         pet.save()
         restored = CatModel.load(pet.save_file)
         assert restored.settings["name"] == pet.model.settings["name"]
+        pet.perform("scratch")
+        assert pet.scene.scratcher is not None
+        prop=pet.scene_view.windows["scratcher"]
+        assert not prop.image.isNull(),"Packaged scratcher art is missing"
+        QApplication.processEvents()
+        prop.grab().save(str(output/"garlic-scratcher.png"))
+        pet.perform("track")
+        assert pet.scene.activity.kind=="track"
+        pet.scene.scratcher.impulse(0,3.)
+        angle=pet.scene.scratcher.angles[0]
+        pet.scene.scratcher.step(.2)
+        assert pet.scene.scratcher.angles[0]!=angle
+        pet.perform("stop")
+        assert pet.scene.scratcher is not None and pet.scene.activity is None
+        pet.perform("put_away")
+        assert pet.scene.scratcher is None
     except Exception:
         errors.append(traceback.format_exc())
     report = {"version": VERSION, "frozen_executable": bool(getattr(sys, "frozen", False)),
               "smooth_webp_valid":all(i["fps"]>=60 for i in pet.motion_info.values()), "render_timer_ms":pet.timer.interval(),
               "removed_actions":["roll","belly","side_sleep"],
-              "rendered_actions": checks, "ok": not errors, "errors": errors}
+              "scene_objects_valid":not errors,"rendered_actions": checks, "ok": not errors, "errors": errors}
     (output / "self-test.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     QApplication.instance().exit(0 if not errors else 1)
 
@@ -871,7 +924,7 @@ def main():
             running=bytes(socket.readAll()).decode(errors="replace")
             if running!=VERSION:
                 QMessageBox.information(None,"先退出旧版悠米",
-                    "旧版悠米仍在运行。请从系统托盘或猫咪右键菜单选择“退出悠米”，再打开这个 1.2 新版。")
+                    "旧版悠米仍在运行。请从系统托盘或猫咪右键菜单选择“退出悠米”，再打开这个 1.3 新版。")
             return 0
         server = QLocalServer()
         QLocalServer.removeServer(channel)

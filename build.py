@@ -26,6 +26,7 @@ for name,info in asset_info.items():
 for name in ["manifest.json","cat.ico","purr.wav"]:
     shutil.copy2(ROOT/"assets"/name,staging)
 shutil.copy2(ROOT/"assets/motion/manifest.json",staging/"motion")
+shutil.copytree(ROOT/"assets/props",staging/"props")
 build_env=os.environ.copy()
 build_deps=ROOT.parent/"build-deps"
 if build_deps.exists():

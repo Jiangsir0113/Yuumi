@@ -49,9 +49,12 @@ class GuiTests(unittest.TestCase):
             self.assertEqual(shot.pixelColor(0,100).alpha(), 0, action)
 
     def test_real_mouse_press_maps_head_chin_back_and_paws(self):
-        for y, expected in [(85,"head"), (140,"chin"), (175,"back"), (275,"paw")]:
+        for x,y,expected in [(160,85,"head"), (160,140,"chin"), (160,220,"back"), (135,275,"paw")]:
             self.pet.model.start("idle")
-            QTest.mouseClick(self.pet, Qt.MouseButton.LeftButton, pos=QPoint(160,y))
+            self.pet.animator.reset_for_test("idle")
+            self.pet.sync_animation(0);self.pet.repaint();self.app.processEvents()
+            QTest.mouseClick(self.pet, Qt.MouseButton.LeftButton, pos=QPoint(x,y))
+            QTest.qWait(QApplication.doubleClickInterval()+80)
             self.assertEqual(self.pet.model.action, expected)
 
     def test_alt_drag_moves_window_and_clamps_to_screen(self):
@@ -98,15 +101,76 @@ class GuiTests(unittest.TestCase):
         self.pet.perform("ball")
         self.assertIsNotNone(self.pet.toy_ball)
         self.pet.perform("head")
-        self.assertIsNone(self.pet.toy_ball)
+        self.assertIsNone(self.pet.scene.activity)
+        self.assertIsNotNone(self.pet.scene.ball)
         self.assertEqual(self.pet.model.action,"head")
         self.pet.perform("ball")
         self.assertIsNotNone(self.pet.toy_ball)
         self.pet.model.start("idle")
+        self.pet.animator.reset_for_test("idle")
+        self.pet.sync_animation(0);self.pet.repaint();self.app.processEvents()
         QTest.mouseClick(self.pet,Qt.MouseButton.LeftButton,pos=QPoint(160,85))
-        self.assertIsNone(self.pet.toy_ball)
+        QTest.qWait(QApplication.doubleClickInterval()+80)
+        self.assertIsNone(self.pet.scene.activity)
+        self.assertIsNotNone(self.pet.scene.ball)
         self.assertIsNone(self.pet.ball_target)
         self.assertEqual(self.pet.model.action,"head")
+
+    def test_double_click_opens_panel_without_touch_reward_or_cancel(self):
+        self.pet.perform('ball')
+        before=self.pet.model.affinity
+        QTest.mouseClick(self.pet,Qt.MouseButton.LeftButton,pos=QPoint(160,85))
+        QTest.qWait(50)
+        QTest.mouseDClick(self.pet,Qt.MouseButton.LeftButton,pos=QPoint(160,85))
+        QTest.qWait(QApplication.doubleClickInterval()+30)
+        self.assertIsNotNone(self.pet.panel)
+        self.assertTrue(self.pet.panel.isVisible())
+        self.assertEqual(self.pet.model.affinity,before)
+        self.assertEqual(self.pet.scene.activity.kind,'ball')
+
+    def test_scratcher_controls_and_put_away(self):
+        self.pet.perform('scratch')
+        self.assertIsNotNone(self.pet.scene.scratcher)
+        prop=self.pet.scene_view.windows['scratcher']
+        self.assertFalse(prop.image.isNull())
+        self.pet.perform('track')
+        self.assertEqual(self.pet.scene.activity.kind,'track')
+        self.pet.perform('stop')
+        self.assertIsNone(self.pet.scene.activity)
+        self.assertIsNotNone(self.pet.scene.scratcher)
+        self.pet.perform('put_away')
+        self.assertIsNone(self.pet.scene.scratcher)
+
+    def test_scratcher_real_click_regions_and_dragging(self):
+        self.pet.perform('scratch')
+        prop=self.pet.scene_view.windows['scratcher']
+        original=self.pet.scene.scratcher.x
+        QTest.mousePress(prop,Qt.MouseButton.LeftButton,pos=QPoint(100,180))
+        QTest.mouseMove(prop,QPoint(130,180),delay=20)
+        QTest.mouseRelease(prop,Qt.MouseButton.LeftButton,pos=QPoint(130,180))
+        self.assertNotEqual(self.pet.scene.scratcher.x,original)
+        self.assertEqual(self.pet.scene.activity.kind,'scratch')
+        QTest.mouseClick(prop,Qt.MouseButton.LeftButton,pos=QPoint(110,315))
+        self.assertEqual(self.pet.scene.activity.kind,'track')
+        self.assertGreater(self.pet.scene.scratcher.taps,0)
+        QTest.mouseClick(self.pet.scene_view.buttons['put_away'],Qt.MouseButton.LeftButton)
+        self.assertIsNone(self.pet.scene.scratcher)
+
+    def test_hidden_tick_does_not_render_or_animate(self):
+        before=self.pet.animator.clock
+        self.pet.toggle_visible()
+        self.pet.last_clock-=.2
+        self.pet.tick()
+        self.assertEqual(self.pet.animator.clock,before)
+        self.assertEqual(self.pet.timer.interval(),250)
+        self.assertFalse(self.pet.scene_view.toolbar.isVisible())
+
+    def test_click_through_can_be_recovered_from_tray_path(self):
+        self.pet.setting('click_through',True)
+        self.assertTrue(self.pet.windowFlags() & Qt.WindowType.WindowTransparentForInput)
+        self.pet.recover()
+        self.assertFalse(self.pet.model.settings['click_through'])
+        self.assertFalse(self.pet.windowFlags() & Qt.WindowType.WindowTransparentForInput)
 
     def test_smooth_animation_uses_manual_clock_and_encoded_timeline(self):
         self.assertEqual(self.pet.timer.interval(),8)

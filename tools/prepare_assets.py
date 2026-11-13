@@ -130,7 +130,8 @@ def extract(path):
 
 
 def main():
-    sheets = {p.stem: extract(p) for p in (ROOT / "art-source").glob("*.png")}
+    required={spec[0] for spec in GROUPS.values()}
+    sheets = {p.stem: extract(p) for p in (ROOT / "art-source").glob("*.png") if p.stem in required}
     manifest = {}
     contacts = []
     for name, (sheet, indices, height) in GROUPS.items():

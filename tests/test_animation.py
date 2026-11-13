@@ -1,12 +1,25 @@
 from pathlib import Path
 import unittest
 import numpy as np
+import threading
+from unittest.mock import patch
 from animation_engine import Animator,PostureGraph,EDGES
 
 ASSETS=Path(__file__).resolve().parents[1]/"assets"
 
 
 class PostureTests(unittest.TestCase):
+    def test_turn_stays_on_standing_edge(self):
+        graph=PostureGraph();graph.node='stand_right';graph.set_goal('stand_left',True)
+        nodes=[]
+        for _ in range(50):
+            graph.advance(1/64)
+            nodes.append(graph.node)
+            self.assertNotIn(graph.edge,{'stand_right','stand_left'})
+        self.assertTrue(graph.ready)
+        self.assertEqual(graph.node,'stand_left')
+        self.assertNotIn('sit',nodes)
+
     def test_reverses_current_edge_without_finishing_old_goal(self):
         graph=PostureGraph()
         graph.set_goal("stand_right",True)
@@ -85,6 +98,37 @@ class AnimationTests(unittest.TestCase):
         a.update("chin",0)
         self.assertAlmostEqual(a.phase,expected)
         self.assertTrue(np.array_equal(previous,a.last))
+
+    def test_target_phase_waits_for_structural_entry(self):
+        a=self.animator;a.reset_for_test('sleep')
+        a.update('stretch',0,urgent=True)
+        for _ in range(12):a.update('stretch',1/64,urgent=True)
+        self.assertFalse(a.graph.ready)
+        self.assertEqual(a.phase,0)
+        for _ in range(100):a.update('stretch',1/64,urgent=True)
+        self.assertTrue(a.graph.ready)
+        self.assertGreater(a.phase,0)
+
+    def test_dynamic_optical_flow_is_never_on_calling_thread(self):
+        import animation_engine as engine
+        original=engine.PixelBlend
+        threads=[]
+        class Checked(original):
+            def __init__(self,*args):
+                threads.append(threading.current_thread().name)
+                super().__init__(*args)
+        with patch.object(engine,'PixelBlend',Checked):
+            a=self.animator;a.reset_for_test('idle')
+            a.update('head',0)
+            if a.flow_future:a.flow_future.result(timeout=5)
+        self.assertTrue(threads)
+        self.assertTrue(all(name.startswith('Youmi-blend') for name in threads))
+
+    def test_large_delta_has_same_visual_clock_as_simulation(self):
+        a=self.animator;a.reset_for_test('walk',.4)
+        before=a.phase
+        a.update('walk',.2)
+        self.assertAlmostEqual(a.phase-before,.2,places=5)
 
 
 if __name__=="__main__":

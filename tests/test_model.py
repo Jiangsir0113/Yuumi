@@ -162,6 +162,51 @@ class ModelTests(unittest.TestCase):
             self.assertEqual(cat.settings["name"],"悠米")
             self.assertEqual(cat.affinity,73)
 
+    def test_same_elapsed_stroke_is_independent_of_event_frequency(self):
+        results=[]
+        for hz in (10,20,100,240):
+            cat=self.cat()
+            for _ in range(hz*5):
+                cat.touch('head',1/hz)
+                cat.tick(1/hz,touching=True)
+            results.append((cat.touch_load,cat.affinity))
+        for result in results[1:]:
+            self.assertAlmostEqual(result[0],results[0][0],places=6)
+            self.assertAlmostEqual(result[1],results[0][1],places=6)
+
+    def test_resting_contact_counts_and_refusal_requires_rest(self):
+        cat=self.cat()
+        for _ in range(40*64):
+            cat.contact('head',1/64,0)
+            cat.tick(1/64,touching=True)
+        self.assertGreater(cat.cooldown,0)
+        remaining=cat.cooldown
+        cat.tick(5,touching=True)
+        self.assertEqual(cat.cooldown,remaining)
+        cat.tick(20,touching=False)
+        self.assertEqual(cat.cooldown,0)
+
+    def test_entering_pose_does_not_consume_action_or_grant_food(self):
+        cat=self.cat();cat.satiety=30;cat.start('eat')
+        cat.tick(1,executing=False)
+        self.assertEqual(cat.elapsed,0)
+        self.assertEqual(cat.remaining,7)
+        self.assertLess(cat.satiety,30)
+        cat.tick(1,executing=True)
+        self.assertGreater(cat.satiety,34)
+
+    def test_preferences_persist_and_quiet_mode_avoids_roaming(self):
+        cat=self.cat()
+        for _ in range(20):cat.touch('chin',.5)
+        self.assertEqual(cat.favorite_region,'chin')
+        with tempfile.TemporaryDirectory() as temp:
+            path=Path(temp)/'state.json';cat.save(path);restored=CatModel.load(path)
+            self.assertEqual(restored.favorite_region,'chin')
+        cat.settings['quiet']=True;cat.cooldown=0;cat.energy=80
+        for _ in range(100):
+            cat.autonomous()
+            self.assertNotIn(cat.action,{'walk','trot'})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,7 +23,7 @@ if result.returncode!=0:
     raise RuntimeError("The packaged executable failed; a stale report will not be accepted")
 report = json.loads((output/"self-test.json").read_text(encoding="utf-8"))
 assert result.returncode==0 and report["ok"] and report["frozen_executable"],report
-assert report["version"]=="1.2.0" and report["smooth_webp_valid"]
+assert report["version"]=="1.3.0" and report["smooth_webp_valid"] and report["scene_objects_valid"]
 assert len(report["rendered_actions"])==len(ACTIONS)
 print(json.dumps({"exit_code":result.returncode,"packaged":report["frozen_executable"],
                   "actions":len(report["rendered_actions"]),"ok":report["ok"],

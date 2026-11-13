@@ -28,7 +28,8 @@ class LiveBenchmark:
     def next(self):
         self.index+=1
         if self.index>=len(self.actions):
-            report={"version":"1.2.0","diagnostic_looping":True,"encoded_fps":64,
+            report={"version":"1.3.0","diagnostic_looping":True,"encoded_fps":64,
+                "warmup_seconds_per_action":2,
                 "all_actions_rendered_at_least_60fps":all(r["render_fps"]>=60 for r in self.results),
                 "states":self.results}
             self.output.parent.mkdir(parents=True,exist_ok=True)
@@ -40,6 +41,10 @@ class LiveBenchmark:
         self.pet.model.start(self.action,500)
         self.pet.direction=1
         self.pet.urgent_animation=True
+        self.cold_started=time.monotonic()
+        QTimer.singleShot(2000,self.begin_measure)
+
+    def begin_measure(self):
         self.started=time.monotonic()
         self.before=(self.pet.paint_count,self.pet.animator.bank.frame_events,self.pet.animator.non_identical_frames)
         QTimer.singleShot(2000,self.finish)
@@ -49,10 +54,14 @@ class LiveBenchmark:
         duration=end-self.started
         times=[t for t in self.pet.paint_times if self.started<=t<=end]
         gaps=sorted((b-a)*1000 for a,b in zip(times,times[1:]))
+        cold=[t for t in self.pet.paint_times if self.cold_started<=t<self.started]
+        cold_gaps=[(b-a)*1000 for a,b in zip(cold,cold[1:])]
         self.results.append({"action":self.action,"seconds":round(duration,3),
             "render_fps":round((self.pet.paint_count-self.before[0])/duration,2),
             "animation_events_per_second":round((self.pet.animator.bank.frame_events-self.before[1])/duration,2),
             "non_identical_frames_per_second":round((self.pet.animator.non_identical_frames-self.before[2])/duration,2),
             "p95_frame_gap_ms":round(gaps[int(len(gaps)*.95)] if gaps else 0,2),
+            "p99_frame_gap_ms":round(gaps[min(len(gaps)-1,int(len(gaps)*.99))] if gaps else 0,2),
+            "cold_max_frame_gap_ms":round(max(cold_gaps,default=0),2),
             "max_frame_gap_ms":round(max(gaps,default=0),2)})
         self.next()
