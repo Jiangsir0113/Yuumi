@@ -42,7 +42,7 @@ diagnostic("Qt modules imported")
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 ASSETS = ROOT / "assets"
-VERSION = "1.4.1"
+VERSION = "1.5.0"
 
 
 def state_path():
@@ -142,14 +142,16 @@ class CarePanel(QDialog):
             ("groom", "洗脸理毛", "爱干净的小猫"), ("loaf", "揣手手", "安安静静陪你")],
             "离线不扣照顾分，也不会因为忘记喂食生病。\n吃喝过程中再点喂食，不会重复加饱腹。")
         self.add_actions("玩耍", [("toy", "逗猫棒", "鼠标靠近猫咪，它会伏低再扑抓"),
-            ("ball", "拍小球", "玩一会儿，再洗洗脸"), ("wave", "叫叫它", "抬起小爪打招呼"),
+            ("rally", "悠米发球", "等悠米先拨球，再点击小球推回去"),
+            ("sunbeam", "晒太阳", "拖动光斑，悠米会走过去休息"),
+            ("ball", "拍小球", "让悠米自己追着小球玩"), ("wave", "叫叫它", "抬起小爪打招呼"),
             ("idle", "安静陪我", "回到放松的姿势"), ("stretch", "伸懒腰", "从前爪伸到小尾巴"),
             ("look", "看看四周", "好奇地左看右看"), ("walk", "散个步", "慢慢逛一会儿"),
             ("trot", "小跑一下", "精神满满"), ("scratch", "大蒜抓抓板", "抓白色绳面，活动前爪"),
             ("track", "拨圆槽小球", "小球沿底盘圆槽滚动、碰撞、减速"),
             ("stop", "结束互动", "道具留在原地，悠米先休息"),
-            ("put_away", "收起道具", "收起食盆、小球和猫抓板")],
-            "道具可拖动搬家。点猫抓板上部抓绳，点底盘拨球。\n互动时用桌面上的“结束”按钮或右键菜单停止。")
+            ("put_away", "收起道具", "收起所有桌面道具")],
+            "道具可拖动，右键单独收起。发球后点击小球回球。\n互动时用桌面上的“结束”按钮或右键菜单停止。")
         self.add_settings()
         footer = QLabel("左键轻揉 · Alt + 拖动搬家 · 右键打开菜单")
         footer.setObjectName("status")
@@ -186,7 +188,7 @@ class CarePanel(QDialog):
     def perform(self, action):
         self.pet.perform(action)
         self.refresh()
-        if action in {"toy", "ball", "scratch", "track"}:
+        if action in {"toy", "ball", "scratch", "track", "sunbeam", "rally"}:
             self.hide()
 
     def add_settings(self):
@@ -212,7 +214,8 @@ class CarePanel(QDialog):
         self.screen_combo.currentIndexChanged.connect(self.pet.change_screen)
         col.addWidget(self.screen_combo)
         self.setting_checks={}
-        for key, text in [("roam", "允许自己漫步"), ("quiet", "安静陪伴（暂停自主漫步和道具显示）"),
+        for key, text in [("roam", "允许自己漫步"), ("autonomy", "允许自主喝水、抓板和晒太阳"),
+                          ("quiet", "安静陪伴（暂停自主活动和道具显示）"),
                           ("click_through", "鼠标穿透（从托盘恢复交互）"), ("sound", "轻柔呼噜声（合成音效）"),
                           ("hide_fullscreen", "全屏应用时自动隐藏")]:
             cb = QCheckBox(text)
@@ -331,6 +334,7 @@ class CatWindow(QWidget):
         self.scene_view=SceneView(self,ASSETS)
         self.resize(round(320*self.scale), round(307*self.scale))
         self.recover(restore=True)
+        self.scene.restore_layout(self.model.scene_layout, self.scale, self.scene_limits())
         self.sound = QSoundEffect(self)
         self.sound.setSource(QUrl.fromLocalFile(str(ASSETS / "purr.wav")))
         self.sound.setVolume(.17)
@@ -346,7 +350,7 @@ class CatWindow(QWidget):
         self.fullscreen_timer.timeout.connect(self.check_fullscreen)
         if not testing:
             self.fullscreen_timer.start(1200)
-        QApplication.instance().screenRemoved.connect(lambda *_: self.recover())
+        QApplication.instance().screenRemoved.connect(lambda *_: self.restore_display_layout())
         if self.model.settings.get("click_through"):
             self.setWindowFlag(Qt.WindowType.WindowTransparentForInput,True)
             self.show()
@@ -434,8 +438,12 @@ class CatWindow(QWidget):
 
     def setting(self, key, val):
         self.model.settings[key] = val
-        if key == "roam" and not val and self.model.action in {"walk", "trot"} and not self.care_pending:
-            self.model.request("idle")
+        if key in {"roam", "autonomy"} and not val:
+            activity = self.scene.activity
+            if activity and activity.autonomous:
+                self.scene.cancel(self.model)
+            elif key == "roam" and activity is None and self.model.action in {"walk", "trot"}:
+                self.model.request("idle")
         if key == "sound" and not val:
             self.sound.stop()
         if key == "hide_fullscreen":
@@ -455,26 +463,46 @@ class CatWindow(QWidget):
         self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
         self.save()
 
+    def apply_layout(self, layout):
+        if self.scene.activity:
+            self.scene.cancel(self.model)
+        self.scene.restore_layout(layout, self.scale, self.scene_limits())
+        self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
+
+    def restore_display_layout(self):
+        layout = self.model.scene_layout
+        self.recover()
+        self.apply_layout(layout)
+        self.save()
+
     def change_screen(self, index):
-        self.scene.put_away()
+        layout = self.scene.snapshot_layout(self.scale, self.scene_limits())
         self.model.settings["screen"] = max(0, index)
         self.recover()
+        self.apply_layout(layout)
         self.save()
 
     def change_size(self, scale):
-        baseline = self.y()+self.height()
-        self.scale = max(.65, min(1.5, scale))
-        self.model.settings["size"] = self.scale
-        self.resize(round(320*self.scale), round(307*self.scale))
-        if self.scene.scratcher:self.scene.scratcher.scale=self.scale
-        if self.scene.ball:self.scene.ball.radius=12*self.scale
-        for obj in (self.scene.feeder,self.scene.fountain,self.scene.snack):
-            if obj:obj.scale=self.scale
-        self.move_safe(QPoint(self.x(), baseline-self.height()))
+        scale = max(.65, min(1.5, scale))
+        if scale == self.scale:
+            return
+        layout = self.scene.snapshot_layout(self.scale, self.scene_limits())
+        baseline = self.y() + self.height()
+        self.scale = scale
+        self.model.settings["size"] = scale
+        self.resize(round(320 * scale), round(307 * scale))
+        self.move_safe(QPoint(self.x(), baseline - self.height()))
+        self.apply_layout(layout)
         self.save()
+
+    def remove_prop(self, kind):
+        if self.scene.remove_prop(kind, self.model):
+            self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
+            self.save()
 
     def save(self):
         self.model.settings["position"] = [self.x(), self.y()]
+        self.model.scene_layout = self.scene.snapshot_layout(self.scale, self.scene_limits())
         try:
             self.model.save(self.save_file)
         except OSError:
@@ -490,13 +518,13 @@ class CatWindow(QWidget):
         self.urgent_animation=True
         self.end_gesture()
         self.model.last_message=""
-        if action in {"food","water","snack","toy","ball","scratch","track"}:
+        if action in {"food","water","snack","toy","ball","scratch","track","sunbeam","rally"}:
             if self.model.settings.get("quiet"):
                 self.setting("quiet",False)
             kind="wand" if action=="toy" else action
-            self.scene.begin(kind,self.model,self.x(),self.y(),self.scale,self.scene_limits())
-            self.toy_mode=kind=="wand"
-            upcoming={"food":"eat","water":"drink","snack":"drink","scratch":"scratch","track":"ball","ball":"ball"}.get(kind)
+            started = self.scene.begin(kind, self.model, self.x(), self.y(), self.scale, self.scene_limits())
+            self.toy_mode = bool(self.scene.activity and self.scene.activity.kind == "wand")
+            upcoming={"food":"eat","water":"drink","snack":"drink","scratch":"scratch","track":"ball","ball":"ball","rally":"ball","sunbeam":"loaf"}.get(kind)
             if upcoming:
                 self.animator.bank.prefetch(upcoming)
                 if upcoming in self.animator.bank.warm:self.animator.bank.warm.remove(upcoming)
@@ -506,12 +534,16 @@ class CatWindow(QWidget):
             self.toy_ball=self.scene_view.windows.get("ball")
             a=self.scene.activity
             self.care_pending=a.kind if a and a.kind in {"food","water","snack"} and a.stage=="approach" else None
+            if started:
+                self.save()
             return
         if action in {"stop","put_away"}:
             self.scene.put_away(self.model) if action=="put_away" else self.scene.cancel(self.model)
             self.toy_mode=False
             self.say("道具收好啦" if action=="put_away" else "先歇一会儿，想玩时再叫我")
             self.scene_view.sync(self.isVisible() and not self.model.settings.get("quiet"))
+            if action == "put_away":
+                self.save()
             return
         self.scene.cancel()
         self.toy_mode=False
@@ -557,7 +589,8 @@ class CatWindow(QWidget):
                 previous_scene_message=self.scene.message
                 self.scene.update(dt,self.model,self.x(),self.y(),self.scale,
                                   self.animator.execution_ready and self.animator.action==self.model.action,
-                                  self.animator.phase,(cursor.x(),cursor.y()),self.scene_limits())
+                                  self.animator.phase,(cursor.x(),cursor.y()),self.scene_limits(),
+                                  allow_autonomy=not self.pressed)
                 if self.scene.message and self.scene.message!=previous_scene_message:
                     self.say(self.scene.message)
                 if self.scene.activity:
@@ -803,7 +836,8 @@ class CatWindow(QWidget):
         menu.addAction("打开陪伴小屋…", self.open_panel)
         menu.addSeparator()
         for label, key in [("喂猫粮", "food"), ("喝点水", "water"), ("摸摸头", "head"),
-                           ("逗猫棒", "toy"), ("大蒜抓抓板", "scratch"), ("拨圆槽小球", "track"),
+                           ("逗猫棒", "toy"), ("悠米发球", "rally"), ("晒太阳", "sunbeam"),
+                           ("大蒜抓抓板", "scratch"), ("拨圆槽小球", "track"),
                            ("结束互动", "stop"), ("收起道具", "put_away"),
                            ("哄它睡觉", "sleep"), ("轻轻叫醒", "wake")]:
             menu.addAction(label, lambda k=key: self.perform(k))
@@ -852,6 +886,7 @@ def executable_self_test(pet, output):
     pet.fullscreen_timer.stop()
     errors = []
     checks = []
+    new_features = []
     try:
         for action in ACTIONS:
             pet.model.start(action)
@@ -913,12 +948,45 @@ def executable_self_test(pet, output):
         assert pet.scene.feeder and pet.scene.fountain and pet.scene.snack
         pet.perform("put_away")
         assert pet.scene.feeder is pet.scene.fountain is pet.scene.snack is None
+
+        pet.perform("sunbeam")
+        assert pet.scene.sunbeam and pet.scene.activity.kind == "sunbeam"
+        target = pet.scene.destination
+        if target:
+            pet.move_safe(QPoint(round(target[0]), round(target[1])))
+            pet.scene.update(1 / 64, pet.model, pet.x(), pet.y(), pet.scale, True, 0)
+        assert pet.scene.activity.stage == "rest" and pet.model.action == "loaf"
+        QApplication.processEvents()
+        pet.scene_view.windows["sunbeam"].grab().save(str(output / "sunbeam.png"))
+        new_features.append("sunbeam")
+
+        pet.perform("rally")
+        assert pet.scene.ball and pet.scene.activity.kind == "rally"
+        target = pet.scene.destination
+        if target:
+            pet.move_safe(QPoint(round(target[0]), round(target[1])))
+            pet.scene.update(1 / 64, pet.model, pet.x(), pet.y(), pet.scale, True, 0)
+        pet.scene.update(1 / 64, pet.model, pet.x(), pet.y(), pet.scale, True, .76)
+        assert pet.scene.activity.stage in {"retreat", "wait"} and pet.scene.activity.strikes == 1
+        assert pet.scene.rally.push(pet.scene, pet.model, pet.x(), pet.y(), pet.scale)
+        assert pet.scene.activity.stage == "incoming"
+        new_features.append("rally")
+        pet.perform("stop")
+
+        pet.save()
+        persisted = CatModel.load(pet.save_file)
+        restored_scene = SceneController()
+        restored_scene.restore_layout(persisted.scene_layout, pet.scale, pet.scene_limits())
+        assert restored_scene.sunbeam and restored_scene.ball and restored_scene.activity is None
+        assert abs(restored_scene.sunbeam.x - pet.scene.sunbeam.x) < 1
+        new_features.append("layout_restore")
     except Exception:
         errors.append(traceback.format_exc())
     report = {"version": VERSION, "frozen_executable": bool(getattr(sys, "frozen", False)),
               "smooth_webp_valid":all(i["fps"]>=60 for i in pet.motion_info.values()), "render_timer_ms":pet.timer.interval(),
               "removed_actions":["roll","belly","side_sleep"],
-              "scene_objects_valid":not errors,"rendered_actions": checks, "ok": not errors, "errors": errors}
+              "scene_objects_valid":not errors,"rendered_actions": checks, "new_features": new_features,
+              "ok": not errors, "errors": errors}
     (output / "self-test.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     QApplication.instance().exit(0 if not errors else 1)
 
@@ -1001,7 +1069,7 @@ def main():
         QTimer.singleShot(8000,finish_benchmark)
     if args.benchmark_all:
         from benchmarks import LiveBenchmark
-        pet.live_benchmark=LiveBenchmark(pet,Path(args.benchmark_all),VERSION)
+        pet.live_benchmark=LiveBenchmark(pet, Path(args.benchmark_all), VERSION)
     if args.quit_after:
         QTimer.singleShot(args.quit_after*1000, pet.quit_app)
     return app.exec()

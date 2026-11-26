@@ -51,7 +51,7 @@ TOUCH_ACTIONS = {"head", "chin", "back", "cheek", "paw"}
 CARE_ACTIONS = {"sniff", "eat", "treat", "drink", "lick", "groom"}
 DEFAULT_SETTINGS = {"size": 1.0, "roam": True, "sound": False,
                     "hide_fullscreen": True, "screen": 0, "name": "悠米",
-                    "quiet": False, "click_through": False}
+                    "quiet": False, "click_through": False, "autonomy": True}
 
 
 def clamp(value: float, low=0., high=100.) -> float:
@@ -79,6 +79,7 @@ class CatModel:
     curiosity: float = field(default_factory=lambda: random.uniform(.35,.85))
     contact_age: float = 0.
     active_contact: str | None = None
+    scene_layout: dict = field(default_factory=dict)
 
     @property
     def sleeping(self):
@@ -286,9 +287,10 @@ class CatModel:
         return "在你身边就很安心"
 
     def serialize(self):
-        return {"version": 2, "needs": {k: getattr(self, k) for k in
+        return {"version": 3, "needs": {k: getattr(self, k) for k in
                 ("satiety", "thirst", "energy", "happiness", "affinity")},
-                "settings": self.settings,"preferences":self.preferences,"curiosity":self.curiosity}
+                "settings": self.settings,"preferences":self.preferences,"curiosity":self.curiosity,
+                "scene_layout": self.scene_layout}
 
     @classmethod
     def load(cls, path: Path):
@@ -301,7 +303,7 @@ class CatModel:
                     setattr(model, k, clamp(val))
             settings = data.get("settings", {})
             if isinstance(settings, dict):
-                for k in ("roam", "sound", "hide_fullscreen", "quiet", "click_through"):
+                for k in ("roam", "sound", "hide_fullscreen", "quiet", "click_through", "autonomy"):
                     if type(settings.get(k)) is bool:
                         model.settings[k] = settings[k]
                 size = settings.get("size")
@@ -319,6 +321,9 @@ class CatModel:
             for key,value in data.get("preferences",{}).items():
                 if key in TOUCH_ACTIONS and isinstance(value,(int,float)) and math.isfinite(value):
                     model.preferences[key]=clamp(value,0,3600)
+            scene_layout = data.get("scene_layout")
+            if isinstance(scene_layout, dict):
+                model.scene_layout = scene_layout
             curiosity=data.get("curiosity")
             if isinstance(curiosity,(int,float)) and math.isfinite(curiosity):
                 model.curiosity=clamp(curiosity,.2,.9)

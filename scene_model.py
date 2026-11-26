@@ -4,15 +4,26 @@ import math
 import json
 from pathlib import Path
 from cat_model import CARE_ACTIONS, clamp
+from rally import BallRally
 
 TAU=math.tau
 CAT_WIDTH = 320
+CAT_HEIGHT = 307
 CAT_GROUND = 286
 MOUTH_X = 286
 # Window-local contact points for the scratch sweep and the lowered batting paw.
 SCRATCH_PAW = (276, 165)
 TRACK_PAW = (270, 270)
 DEVICE_ATTR = {'food': 'feeder', 'water': 'fountain', 'snack': 'snack'}
+DEVICE_ART = {'food': 'petkit-solo', 'water': 'petkit-solo-se', 'snack': 'fregate-treat'}
+PROP_ACTIVITIES = {
+    'feeder': {'food'},
+    'fountain': {'water'},
+    'snack': {'snack'},
+    'ball': {'ball', 'rally'},
+    'scratcher': {'scratch', 'track'},
+    'sunbeam': {'sunbeam'},
+}
 
 @dataclass
 class Bowl:
@@ -75,6 +86,19 @@ class Ball:
             elif self.x>right-self.radius:
                 self.x=right-self.radius
                 self.velocity=-abs(self.velocity)*.72
+
+@dataclass
+class Sunbeam:
+    x: float
+    floor: float
+    scale: float = 1.
+
+    @property
+    def width(self): return 216 * self.scale
+    @property
+    def height(self): return 66 * self.scale
+    @property
+    def y(self): return self.floor - self.height / 2
 
 @dataclass
 class Scratcher:
@@ -147,6 +171,10 @@ class Activity:
     contact_cycle: int=-1
     strikes: int=0
     struck_at: float=-100.
+    autonomous: bool = False
+    rest_anchor: tuple[float, float] | None = None
+    pending_target: tuple[float, float] | None = None
+    target_changed_at: float = 0.
 
 class SceneController:
     def __init__(self):
@@ -155,8 +183,8 @@ class SceneController:
         self.activity=None
         self.bowl=None
         self.feeder=self.fountain=self.snack=None
-        self.ball=None
-        self.scratcher=None
+        self.ball=self.scratcher=self.sunbeam=None
+        self.rally = BallRally()
         self.destination=None
         self.direction=1
         self.pounce_velocity=0.
@@ -167,6 +195,7 @@ class SceneController:
         self.message=''
         self.last_need=0.
         self.limits=(0.,0.,1200.,700.)
+        self.next_autonomy_at = 12.
 
     def cancel(self,model=None):
         self.revision+=1
@@ -174,14 +203,29 @@ class SceneController:
         self.destination=None
         self.pounce_velocity=0.
         self.last_pointer=None
+        self.rally.reset()
+        self.next_autonomy_at = max(self.next_autonomy_at, self.clock + 10.)
         if model is not None:
             model.queue.clear()
             model.start('idle')
 
     def put_away(self,model=None):
         self.cancel(model)
-        self.bowl=self.ball=self.scratcher=None
+        self.bowl=self.ball=self.scratcher=self.sunbeam=None
         self.feeder=self.fountain=self.snack=None
+
+    def remove_prop(self, kind, model):
+        if kind not in PROP_ACTIVITIES:
+            return False
+        obj = getattr(self, kind)
+        if obj is None:
+            return False
+        if self.activity and self.activity.kind in PROP_ACTIVITIES[kind]:
+            self.cancel(model)
+        if self.bowl is obj:
+            self.bowl = None
+        setattr(self, kind, None)
+        return True
 
     def refill(self,kind):
         obj=getattr(self,DEVICE_ATTR[kind])
@@ -194,6 +238,110 @@ class SceneController:
             self.message='SOLO SE 已续水' if kind=='water' else '换好一支弗列加特猫条'
         obj.pulse=1.
         return True
+
+    def _make_device(self, kind, x, floor, scale, facing=1, amount=1.):
+        layout = self.equipment_layout[DEVICE_ART[kind]]
+        obj = Bowl(x, floor, kind, amount=amount, facing=facing, scale=scale,
+                   logical_height=layout['logical_height'], aspect=layout['width']/layout['height'],
+                   mouth=tuple(layout['contact']))
+        if kind == 'food':
+            packet = self.equipment_layout['fregate-food']
+            obj.logical_extra = obj.logical_height * .38 * packet['width']/packet['height'] + 10
+        return obj
+
+    def _make_scratcher(self, x, floor, scale):
+        layout = self.prop_layout
+        return Scratcher(x, floor, scale, layout['logical_height'], layout['source_width'], layout['source_height'],
+                         tuple(layout['rope_left']), tuple(layout['rope_right']),
+                         tuple(layout['track_center']), tuple(layout['track_radius']))
+
+    def _prop_ranges(self, kind, obj, scale, limits):
+        """World-coordinate movement ranges for the prop's anchor, matching its window."""
+        l, t, r, b = limits
+        right = r + round(CAT_WIDTH * scale)
+        bottom = b + round(CAT_HEIGHT * scale)
+        ground_adjustment = 0.
+        if kind == 'ball':
+            width = height = 36 * scale
+            from_left, from_top = 18 * scale, 30 * scale
+        elif kind == 'sunbeam':
+            width, height = obj.width, obj.height
+            from_left, from_top = 0., height / 2
+        elif kind == 'scratcher':
+            width, height = obj.width, obj.height
+            from_left, from_top = 0., height
+        else:
+            width, height = obj.width + obj.extra_width, obj.height
+            from_left, from_top = obj.x - obj.left, height
+            if kind == 'snack':
+                ground_adjustment = height * (obj.mouth[1] - 1) + 94 * scale
+        xmin, xmax = l + from_left, right - width + from_left
+        ymin = max(t + from_top, t + CAT_GROUND * scale - ground_adjustment)
+        ymax = min(bottom - height + from_top, b + CAT_GROUND * scale - ground_adjustment)
+        return (xmin, ymin, xmax, ymax) if xmin <= xmax and ymin <= ymax else None
+
+    def snapshot_layout(self, scale, limits):
+        """Capture local placements and supplies without saving active animations or motion."""
+        layout = {}
+        for kind in PROP_ACTIVITIES:
+            obj = getattr(self, kind)
+            if obj is None:
+                continue
+            ranges = self._prop_ranges(kind, obj, scale, limits)
+            if ranges is None:
+                continue
+            xmin, ymin, xmax, ymax = ranges
+            saved = {'x': clamp((obj.x - xmin) / (xmax - xmin), 0., 1.) if xmax > xmin else 0.,
+                     'y': clamp((obj.floor - ymin) / (ymax - ymin), 0., 1.) if ymax > ymin else 0.}
+            if kind in DEVICE_ATTR.values():
+                saved['facing'] = obj.facing
+                # Settle a partially dispensed portion to the same final amount.
+                saved['amount'] = clamp(obj.amount + obj.dispensing / 1.2, 0., 1.)
+                if kind == 'feeder':
+                    saved['stock'] = obj.stock
+            layout[kind] = saved
+        return layout
+
+    @staticmethod
+    def _valid_ratio(value):
+        return type(value) in (float, int) and 0 <= value <= 1
+
+    def restore_layout(self, layout, scale, limits):
+        """Restore known props safely within the current monitor's available area."""
+        self.put_away()
+        self.limits = limits
+        if not isinstance(layout, dict):
+            return
+        device_kind = {attr: kind for kind, attr in DEVICE_ATTR.items()}
+        for kind in PROP_ACTIVITIES:
+            saved = layout.get(kind)
+            if not isinstance(saved, dict):
+                continue
+            x, y = saved.get('x'), saved.get('y')
+            if not self._valid_ratio(x) or not self._valid_ratio(y):
+                continue
+            if kind == 'sunbeam':
+                obj = Sunbeam(0., 0., scale)
+            elif kind == 'ball':
+                obj = Ball(0., 0., radius=12 * scale)
+            elif kind == 'scratcher':
+                obj = self._make_scratcher(0., 0., scale)
+            else:
+                facing = -1 if saved.get('facing') == -1 else 1
+                amount = saved.get('amount')
+                if not self._valid_ratio(amount):
+                    amount = 0. if kind == 'feeder' else 1.
+                obj = self._make_device(device_kind[kind], 0., 0., scale, facing, amount)
+                stock = saved.get('stock')
+                if kind == 'feeder' and type(stock) is int and 0 <= stock <= 8:
+                    obj.stock = stock
+            ranges = self._prop_ranges(kind, obj, scale, limits)
+            if ranges is None:
+                continue
+            xmin, ymin, xmax, ymax = ranges
+            obj.x = xmin + x * (xmax - xmin)
+            obj.floor = ymin + y * (ymax - ymin)
+            setattr(self, kind, obj)
 
     def _target(self,x,y):
         l,t,r,b=self.limits
@@ -293,16 +441,12 @@ class SceneController:
                 # Leave the seated cat's space free and avoid other equipment.
                 for other in (self.feeder,self.fountain,self.snack):
                     if other and abs(bx-other.x)<180*scale:bx=other.x+200*scale
-                layout=self.equipment_layout[{'food':'petkit-solo','water':'petkit-solo-se','snack':'fregate-treat'}[kind]]
+                layout=self.equipment_layout[DEVICE_ART[kind]]
                 height=layout['logical_height']
                 # Treat opening is raised to the same mouth level as drinking.
                 efloor=floor-(94-height*(1-layout['contact'][1]))*scale if kind=='snack' else floor
-                obj=Bowl(clamp(bx,l+80*scale,r+180*scale),max(efloor,t+height*scale),kind,
-                         amount=0. if kind=='food' else 1.,facing=facing,scale=scale,
-                         logical_height=height,aspect=layout['width']/layout['height'],mouth=tuple(layout['contact']))
-                if kind=='food':
-                    packet=self.equipment_layout['fregate-food']
-                    obj.logical_extra=height*.38*packet['width']/packet['height']+10
+                obj=self._make_device(kind, bx, max(efloor,t+height*scale), scale,
+                                      facing, 0. if kind=='food' else 1.)
                 if not self._place_equipment(obj,bx,scale):
                     self.message='暂时没有能靠近的摆放位置'
                     return False
@@ -311,25 +455,41 @@ class SceneController:
             if kind=='food':
                 obj.dispense()
             self.message={'food':'SOLO 正在出粮，悠米会走到食盆前','water':'去 SOLO SE 喝水啦','snack':'尝一口弗列加特猫条'}[kind]
-        elif kind=='ball':
+        elif kind in {'ball','rally'}:
             if self.ball is None:
                 bx=x+365*scale
                 if bx>r+300*scale: bx=x-30*scale
                 self.ball=Ball(clamp(bx,l+15,r+305*scale),floor,25*scale,radius=12*scale)
-            self.message='小球会留在桌面，碰到才会拨动'
+            if kind == 'rally':
+                self.ball.velocity = 0.
+                self.message='悠米正去给你发球…'
+            else:
+                self.message='小球会留在桌面，碰到才会拨动'
         elif kind in {'scratch','track'}:
             obj = self.scratcher
             if obj is None:
                 sx=clamp(x+285*scale,l+30*scale,r+100*scale)
                 layout=self.prop_layout
                 sf=clamp(floor,t+max(layout['logical_height'],CAT_GROUND)*scale,b+CAT_GROUND*scale)
-                obj=Scratcher(sx,sf,scale,layout['logical_height'],layout['source_width'],layout['source_height'],
-                              tuple(layout['rope_left']),tuple(layout['rope_right']),tuple(layout['track_center']),tuple(layout['track_radius']))
+                obj=self._make_scratcher(sx,sf,scale)
             if self._scratcher_target(obj, kind, scale) is None:
                 self.message='暂时够不到，试试往桌面中间挪一点'
                 return False
             self.scratcher = obj
             self.message='抓抓白色绳面' if kind=='scratch' else '用小爪拨动圆槽里的球'
+        elif kind == 'sunbeam':
+            if self.sunbeam is None:
+                patch = Sunbeam(0., floor, scale)
+                ranges = self._prop_ranges(kind, patch, scale, limits)
+                if ranges is None:
+                    self.message='这里放不下光斑'
+                    return False
+                xmin, ymin, xmax, ymax = ranges
+                offset = 125 * scale if x + 125 * scale <= r else -125 * scale
+                patch.x = clamp(x + offset + (CAT_WIDTH * scale - patch.width) / 2, xmin, xmax)
+                patch.floor = clamp(floor, ymin, ymax)
+                self.sunbeam = patch
+            self.message='去晒一会儿太阳'
         elif kind=='wand':
             self.message='缓缓移动鼠标，悠米会注视、蓄力和扑抓'
         else:
@@ -351,12 +511,79 @@ class SceneController:
         model.queue.clear()
         model.start(action)
 
-    def update(self,dt,model,x,y,scale,ready,phase,pointer=None,limits=None):
+    @staticmethod
+    def _autonomy_enabled(model):
+        return model.settings.get('autonomy', True) and model.settings['roam'] and not model.settings['quiet']
+
+    def _consider_autonomy(self, model, x, y, scale):
+        if self.clock < self.next_autonomy_at or not self._autonomy_enabled(model):
+            return
+        if model.action not in {'idle', 'look', 'loaf'} or model.queue or model.cooldown > 0:
+            return
+        if model.active_contact is not None or model.energy < 22:
+            return
+        self.next_autonomy_at = self.clock + 8.
+        if self.fountain and self.fountain.amount > .01 and model.thirst <= 55:
+            kind = 'water'
+        elif self.sunbeam and model.energy < 55:
+            kind = 'sunbeam'
+        elif self.scratcher and model.energy >= 42 and model.rng.random() < .4:
+            kind = 'scratch'
+        elif self.ball and model.energy >= 50 and model.rng.random() < .18:
+            kind = 'rally'
+        elif self.sunbeam and model.rng.random() < .25:
+            kind = 'sunbeam'
+        else:
+            return
+        message = self.message
+        started = self.begin(kind, model, x, y, scale, self.limits)
+        self.message = message
+        if started:
+            self.activity.autonomous = True
+            self.next_autonomy_at = self.clock + (35. if kind == 'water' else 50.)
+
+    def _bask(self, dt, model, x, y, scale, ready):
+        activity = self.activity
+        beam = self.sunbeam
+        target = self._target(beam.x + (beam.width - CAT_WIDTH * scale) / 2, beam.floor - CAT_GROUND * scale)
+        if activity.stage == 'approach':
+            distance = math.dist(target, (x, y))
+            if distance >= 4 * scale:
+                self.destination = target
+                if abs(target[0] - x) > 2:
+                    self.direction = 1 if target[0] > x else -1
+                if model.action not in {'walk', 'trot'}:
+                    model.start('walk')
+                model.remaining = max(1., model.remaining)
+                return
+            self._enter('rest', model, 'loaf')
+            activity.rest_anchor = target
+            activity.pending_target = target
+            return
+        if model.action != 'loaf' or activity.stage_time > 14.:
+            self.cancel()
+            return
+        if target != activity.pending_target:
+            activity.pending_target = target
+            activity.target_changed_at = self.clock
+        if math.dist(target, activity.rest_anchor) > 26 * scale:
+            if self.clock - activity.target_changed_at >= .4:
+                if model.energy > 35 and model.rng.random() < .65:
+                    self._enter('approach', model, 'walk')
+                    self.destination = target
+                else:
+                    self.cancel()
+            return
+        if ready:
+            model.energy = clamp(model.energy + .10 * dt)
+
+    def update(self,dt,model,x,y,scale,ready,phase,pointer=None,limits=None,*,allow_autonomy=False):
         dt=max(0.,min(.25,dt))
         self.clock+=dt
         if limits is not None: self.limits=limits
         l,t,r,b=self.limits
-        if self.ball:
+        ball_held = self.activity and self.activity.kind == 'rally' and self.rally.grabbed
+        if self.ball and not ball_held:
             self.ball.step(dt,l,r+320*scale)
         if self.scratcher:
             self.scratcher.step(dt)
@@ -365,18 +592,31 @@ class SceneController:
         self.destination=None
         self.pounce_velocity=0.
         if not self.activity:
+            if allow_autonomy and ready:
+                self._consider_autonomy(model, x, y, scale)
             return
         a=self.activity
+        if a.autonomous and not self._autonomy_enabled(model):
+            self.cancel(model)
+            return
         a.elapsed+=dt
         a.stage_time+=dt
-        if a.kind in {'wand','ball','scratch','track'} and model.energy<18:
+        if a.kind in {'wand','ball','rally','scratch','track'} and model.energy<18:
             self.cancel()
             model.sequence(['yawn','loaf','sleep'])
-            self.message='有点困了，先休息一会儿'
+            if not a.autonomous:
+                self.message='有点困了，先休息一会儿'
             return
         if a.elapsed>90:
             self.cancel(model)
-            self.message='玩了一会儿，休息一下吧'
+            if not a.autonomous:
+                self.message='玩了一会儿，休息一下吧'
+            return
+        if a.kind=='sunbeam':
+            self._bask(dt, model, x, y, scale, ready)
+            return
+        if a.kind=='rally':
+            self.rally.update(self, model, x, y, scale, ready, phase)
             return
         if a.kind=='wand':
             self._wand(dt,model,x,y,scale,ready,phase,pointer)
@@ -387,7 +627,8 @@ class SceneController:
             placement = self._care_target(obj, obj.left, scale)
             if placement is None:
                 self.cancel(model)
-                self.message='暂时够不到，试试往桌面中间挪一点'
+                if not a.autonomous:
+                    self.message='暂时够不到，试试往桌面中间挪一点'
                 return
             target, obj.facing, obj.x = placement
             self.direction = obj.facing
@@ -401,7 +642,8 @@ class SceneController:
             placement = self._scratcher_target(obj, kind, scale)
             if placement is None:
                 self.cancel(model)
-                self.message='暂时够不到，试试往桌面中间挪一点'
+                if not a.autonomous:
+                    self.message='暂时够不到，试试往桌面中间挪一点'
                 return
             target, self.direction = placement
         distance=math.hypot(target[0]-x,target[1]-y)
@@ -415,7 +657,8 @@ class SceneController:
                 if kind in DEVICE_ATTR:
                     if not model.request(kind, interrupt_care=True):
                         self.cancel()
-                        self.message=model.last_message
+                        if not a.autonomous:
+                            self.message=model.last_message
                         return
                     self.last_need=model.thirst if kind=='water' else model.satiety
                 else:
@@ -490,7 +733,8 @@ class SceneController:
         if a.stage_time>14 and kind in {'scratch','track'}:
             self.cancel()
             model.sequence(['groom','loaf'])
-            self.message='爪爪活动好了，歇一会儿'
+            if not a.autonomous:
+                self.message='爪爪活动好了，歇一会儿'
 
     def _wand(self,dt,model,x,y,scale,ready,phase,pointer):
         a=self.activity

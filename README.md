@@ -2,11 +2,22 @@
 
 一只会在 Windows 桌面漫步、休息、吃猫粮，也会回应摸头、挠下巴和玩具的金渐层。照片风格，离线运行，本地存档。
 
-**[下载 v1.4.1](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.1)** · **[查看所有旧版本](https://github.com/Jiangsir0113/Yuumi/releases)** · **[更新日志](CHANGELOG.md)** · **[动作与玩具预览](docs/media/v1.4.0-preview.mp4)**
+**[下载 v1.5.0](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.5.0)** · **[查看所有旧版本](https://github.com/Jiangsir0113/Yuumi/releases)** · **[更新日志](CHANGELOG.md)** · **[动作与玩具预览](docs/media/v1.4.0-preview.mp4)**
 
 <p align="center"><img src="docs/images/v1.4.0-equipment.png" width="900" alt="悠米与 1.2 倍高度的大蒜抓板、小佩 SOLO 喂食器、SOLO SE 饮水机和弗列加特猫条"></p>
 
 > 当前 Windows x64 构建内置 NumPy 2.5.4，仍需要 `x86-64-v2 / X86_V2` 指令集。本次没有变更 CPU 兼容目标，详见[兼容性说明](docs/COMPATIBILITY.md)。
+
+## v1.5.0 自主陪伴与来回发球
+
+| 玩法 | v1.5.0 怎么玩 |
+| --- | --- |
+| 晒太阳 | 「玩耍 → 晒太阳」放出光斑。点击叫悠米过来，拖动可换位置。悠米走到光斑旁会趴下，挪开光斑时有时会跟过去。 |
+| 悠米发球 | 「玩耍 → 悠米发球」。它走近后用爪拨球，退开等你。点击小球把球推回去，也可横向拖动并松手控制方向。 |
+| 自主喝水和抓板 | 把饮水机或抓板摆在桌面。闲下来时，悠米会根据水分和精力走过去互动，也偶尔会用已有的小球邀请你玩。 |
+| 道具摆放记忆 | 重启后恢复道具位置、朝向和饮食设备余量。右键可单独收起道具，切换屏幕或者桌宠大小时会重新适配位置。 |
+
+「设置」里可以关闭自主活动，也可用「安静陪伴」暂时收起道具。摸猫或点新指令可结束当前互动。 [独立 exe 与帧率验证](docs/VERIFICATION-v1.5.0.md) · [v1.4.1 下载](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.1)
 
 ## v1.4.1 互动与流畅度修复
 
@@ -35,7 +46,7 @@
 
 选择“照顾”中的 **SOLO 喂食器 / SOLO SE 饮水机 / 弗列加特猫条**，也可使用右键菜单。点击设备叫悠米过来，右键设备补粮、续水或换猫条；点击粮袋也可补粮。粮仓为虚拟 8 份，每次仅出一份，食盆有余粮时不会重复出粮，续吃的饱腹增长以剩余份量为限。设备与猫条支持两侧接近，文字保持正向。设备余量在悬停提示中查看；“结束”保留设备，“收起”移除所有道具。
 
-产品外观先通过网络搜图核对，再根据参考生成透明素材。猫粮选择鲜鸡肉烘焙粮代表包装，猫条选择 96% 主食猫条代表包装；并非用户指定的唯一口味。应用中的设备为离线虚拟互动，不连接真实小佩硬件或小佩账户。摆放与余量在当前运行期间保留，猫咪需求、名字等继续使用原本地存档。
+产品外观先通过网络搜图核对，再根据参考生成透明素材。猫粮选择鲜鸡肉烘焙粮代表包装，猫条选择 96% 主食猫条代表包装；并非用户指定的唯一口味。应用中的设备为离线虚拟互动，不连接真实小佩硬件或小佩账户。v1.5.0 会把摆放、余量、猫咪需求和名字保存到本地。
 
 [产品图核对与素材说明](docs/PRODUCT-REFERENCES.md) · [新版验证](docs/VERIFICATION-v1.4.0.md) · [完整更新日志](CHANGELOG.md)
 
@@ -68,7 +79,7 @@
 
 ## 下载与启动
 
-1. 在 [v1.4.1 发布页](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.1) 下载 `Yuumi-v1.4.1-windows-x64.exe`，可自行重命名为 `悠米.exe`。
+1. 在 [v1.5.0 发布页](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.5.0) 下载 `Yuumi-v1.5.0-windows-x64.exe`，可自行重命名为 `悠米.exe`。
 2. 若旧版仍在运行，先用旧版的右键或托盘菜单正常退出。
 3. 双击 exe。无需安装 Python；单文件首次启动需要几秒解包。
 
@@ -130,7 +141,7 @@ py -3.14 -m venv .venv
 
 构建输出为 `dist/悠米.exe`。使用独立存档开发：`python main.py --state-file qa/dev-state.json --panel`。
 
-详见[开发说明](docs/DEVELOPMENT.md)、[v1.4.1 验证记录](docs/VERIFICATION-v1.4.1.md)和[版本发布规则](docs/RELEASING.md)。旧版验证记录仍保留：[v1.4.0](docs/VERIFICATION-v1.4.0.md)、[v1.3.1](docs/VERIFICATION-v1.3.1.md)、[v1.3.0](docs/VERIFICATION-v1.3.md)、[v1.2.0](docs/VERIFICATION.md)。
+详见[开发说明](docs/DEVELOPMENT.md)、[v1.5.0 验证记录](docs/VERIFICATION-v1.5.0.md)和[版本发布规则](docs/RELEASING.md)。旧版验证记录仍保留：[v1.4.1](docs/VERIFICATION-v1.4.1.md)、[v1.4.0](docs/VERIFICATION-v1.4.0.md)、[v1.3.1](docs/VERIFICATION-v1.3.1.md)、[v1.3.0](docs/VERIFICATION-v1.3.md)、[v1.2.0](docs/VERIFICATION.md)。
 
 ## 实现与数据
 

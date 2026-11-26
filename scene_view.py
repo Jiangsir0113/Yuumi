@@ -1,9 +1,10 @@
 """Small independent transparent windows for world objects (not a desktop overlay)."""
-from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import QWidget,QHBoxLayout,QPushButton,QMenu
 from pathlib import Path
 import math
+import time
 
 from scene_model import CAT_GROUND
 
@@ -14,7 +15,7 @@ class PropWindow(QWidget):
         self.cat,self.kind=cat,kind
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setWindowTitle('悠米 · '+{'scratcher':'大蒜猫抓板','feeder':'小佩 SOLO 喂食器','fountain':'小佩 SOLO SE 饮水机','snack':'弗列加特猫条','ball':'小球'}[kind])
+        self.setWindowTitle('悠米 · '+{'scratcher':'大蒜猫抓板','feeder':'小佩 SOLO 喂食器','fountain':'小佩 SOLO SE 饮水机','snack':'弗列加特猫条','ball':'小球','sunbeam':'晒太阳光斑'}[kind])
         self.setWindowIcon(cat.windowIcon())
         filename={'scratcher':'garlic-scratcher','feeder':'petkit-solo','fountain':'petkit-solo-se','snack':'fregate-treat'}.get(kind)
         self.image=QPixmap(str(Path(assets)/'props'/(filename+'.png'))) if filename else None
@@ -25,13 +26,22 @@ class PropWindow(QWidget):
         self.transparent=False
         self._last_visual=None
         self._last_tooltip_state=None
-        self.setToolTip('点击绳面抓挠，点击底部圆槽拨球；拖动可搬家' if kind=='scratcher' else '点击互动，拖动可搬家')
+        self.setToolTip({
+            'scratcher': '点击绳面抓挠，点击底部圆槽拨球；拖动可搬家',
+            'sunbeam': '点击叫悠米来晒太阳，拖动光斑换位置',
+        }.get(kind, '点击互动，拖动可搬家'))
 
     @property
     def data(self):
         return getattr(self.cat.scene,self.kind)
 
+    def rally_active(self):
+        activity = self.cat.scene.activity
+        return self.kind == 'ball' and activity is not None and activity.kind == 'rally'
+
     def _visual_state(self,data):
+        if self.kind == 'sunbeam':
+            return data.width, data.height
         if self.kind=='scratcher':
             angles=tuple(round(angle,3) for angle in data.angles)
             glow=round(160*data.glow/.2)
@@ -65,13 +75,17 @@ class PropWindow(QWidget):
         if data is None:
             self.hide();return
         s=self.cat.scale
-        if self.kind=='scratcher':
+        if self.kind in {'scratcher', 'sunbeam'}:
             geometry=QRect(round(data.x),round(data.y),round(data.width),round(data.height))
         elif self.kind in {'feeder','fountain','snack'}:
             geometry=QRect(round(data.left),round(data.y),round(data.width+data.extra_width),round(data.height))
             self._sync_tooltip(data)
         else:
             geometry=QRect(round(data.x-18*s),round(data.floor-30*s),round(36*s),round(36*s))
+            rally = self.rally_active()
+            if rally != self._last_tooltip_state:
+                self._last_tooltip_state = rally
+                self.setToolTip('悠米等你回球时，点击小球推回去；也可以拖动后松手' if rally else '点击叫悠米追球，拖动可搬家')
         transparent=self.cat.model.settings.get('click_through',False)
         if transparent!=self.transparent:
             self.transparent=transparent
@@ -101,7 +115,17 @@ class PropWindow(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         s=self.cat.scale
-        if self.kind=='scratcher':
+        if self.kind == 'sunbeam':
+            p.scale(self.width() / 2, self.height() / 2)
+            light = QRadialGradient(QPointF(1, 1), 1)
+            light.setColorAt(0, QColor(255, 237, 174, 182))
+            light.setColorAt(.5, QColor(255, 212, 122, 116))
+            light.setColorAt(.83, QColor(248, 174, 82, 43))
+            light.setColorAt(1, QColor(248, 174, 82, 0))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(light)
+            p.drawEllipse(QPointF(1, 1), 1, 1)
+        elif self.kind=='scratcher':
             factor=min(self.width()/self.image.width(),self.height()/self.image.height())
             width,height=self.image.width()*factor,self.image.height()*factor
             fitted=QRectF((self.width()-width)/2,(self.height()-height)/2,width,height)
@@ -176,7 +200,9 @@ class PropWindow(QWidget):
 
     def refill(self):
         if self.data and self.cat.scene.refill(self.data.kind):
-            self.cat.say(self.cat.scene.message);self.sync()
+            self.cat.say(self.cat.scene.message)
+            self.sync()
+            self.cat.save()
 
     def mousePressEvent(self,event):
         if event.button()==Qt.MouseButton.RightButton:
@@ -184,18 +210,37 @@ class PropWindow(QWidget):
             if self.kind=='scratcher':
                 menu.addAction('抓白色绳面',lambda:self.cat.perform('scratch'))
                 menu.addAction('拨圆槽小球',lambda:self.cat.perform('track'))
+            elif self.kind == 'sunbeam':
+                menu.addAction('叫悠米来晒太阳', lambda: self.cat.perform('sunbeam'))
+            elif self.kind == 'ball':
+                menu.addAction('悠米发球', lambda: self.cat.perform('rally'))
+                menu.addAction('让悠米追球', lambda: self.cat.perform('ball'))
             else:
                 menu.addAction('叫悠米过来',lambda:self.cat.perform(self.data.kind if self.kind in {'feeder','fountain','snack'} else 'ball'))
                 if self.kind in {'feeder','fountain','snack'}:
                     menu.addAction({'feeder':'补满弗列加特猫粮','fountain':'给 SOLO SE 续水','snack':'换一支弗列加特猫条'}[self.kind],self.refill)
             menu.addSeparator()
+            menu.addAction('收起这个道具', lambda: self.cat.remove_prop(self.kind))
             menu.addAction('收起所有道具',lambda:self.cat.perform('put_away'))
             menu.exec(event.globalPosition().toPoint())
             return
         if event.button()==Qt.MouseButton.LeftButton:
             self.press=event.globalPosition().toPoint()
-            self.origin=self.pos()
-            self.moving=False
+            self.origin = self.pos()
+            self.moving = False
+            self.rally_press = self.rally_active()
+            if self.rally_press:
+                self.cat.scene.rally.grabbed = True
+                self.flick_x = self.press.x()
+                self.flick_time = time.monotonic()
+                self.flick_speed = 0.
+
+    def event(self, event):
+        if event.type() in {QEvent.Type.UngrabMouse, QEvent.Type.Hide} and getattr(self, 'rally_press', False):
+            self.cat.scene.rally.grabbed = False
+            self.rally_press = False
+            self.press = None
+        return super().event(event)
 
     def mouseMoveEvent(self,event):
         if self.press is None:return
@@ -213,6 +258,8 @@ class PropWindow(QWidget):
         _,cat_top,_,cat_bottom=self.cat.scene_limits()
         if self.kind=='ball':
             floor_offset=30*scale
+        elif self.kind == 'sunbeam':
+            floor_offset = data.height / 2
         elif self.kind=='snack':
             floor_offset=data.height*data.mouth[1]+94*scale
         else:
@@ -221,18 +268,45 @@ class PropWindow(QWidget):
         bottom=min(rect.bottom()-self.height()+1,math.floor(cat_bottom+CAT_GROUND*scale-floor_offset))
         if top<=bottom:
             py=max(top,min(py,bottom))
-        if self.kind=='scratcher':
-            data.x=px;data.floor=py+data.height
+        if self.kind in {'scratcher', 'sunbeam'}:
+            data.x = px
+            data.floor = py + floor_offset
         elif self.kind in {'feeder','fountain','snack'}:
             data.x=px+data.width*(data.mouth[0] if data.facing>0 else 1-data.mouth[0]);data.floor=py+data.height
         else:
-            data.x=px+self.width()/2;data.floor=py+30*self.cat.scale;data.velocity=0.
+            data.x = px + self.width() / 2
+            data.floor = py + floor_offset
+            data.velocity = 0.
+            if self.rally_press:
+                now = time.monotonic()
+                pointer_x = event.globalPosition().x()
+                self.flick_speed = (pointer_x - self.flick_x) / max(.03, now - self.flick_time)
+                self.flick_x, self.flick_time = pointer_x, now
         self.sync()
 
     def mouseReleaseEvent(self,event):
-        if self.press is None:return
-        if not self.moving and self.data:
-            if self.kind=='scratcher':
+        if event.button() != Qt.MouseButton.LeftButton or self.press is None:
+            return
+        moving = self.moving
+        self.press = None
+        self.moving = False
+        if self.rally_press:
+            self.rally_press = False
+            scene = self.cat.scene
+            scene.rally.grabbed = False
+            if self.rally_active():
+                speed = self.flick_speed if moving and time.monotonic() - self.flick_time < .15 else 0.
+                scene.rally.push(scene, self.cat.model, self.cat.x(), self.cat.y(), self.cat.scale,
+                                 velocity=speed if abs(speed) >= 80 * self.cat.scale else None)
+                if moving:
+                    self.cat.save()
+                return
+        if moving:
+            self.cat.save()
+        elif self.data:
+            if self.kind == 'sunbeam':
+                self.cat.perform('sunbeam')
+            elif self.kind=='scratcher':
                 if event.position().y()>self.height()*.88:
                     data=self.data
                     world=(self.x()+event.position().x(),self.y()+event.position().y())
@@ -242,8 +316,6 @@ class PropWindow(QWidget):
                 else:self.cat.perform('scratch')
             elif self.kind=='feeder' and event.position().x()>self.data.width:self.refill()
             else:self.cat.perform(self.data.kind if self.kind in {'feeder','fountain','snack'} else 'ball')
-        self.press=None
-        self.moving=False
 
 class SceneView:
     def __init__(self,cat,assets):
@@ -265,15 +337,20 @@ class SceneView:
 
     def sync(self,visible):
         cat=self.cat
-        for kind in ['feeder','fountain','snack','ball','scratcher']:
+        for kind in ['sunbeam','feeder','fountain','snack','ball','scratcher']:
             data=getattr(cat.scene,kind)
-            if data is not None and kind not in self.windows:
-                self.windows[kind]=PropWindow(cat,kind,self.assets)
+            if data is None:
+                window = self.windows.pop(kind, None)
+                if window is not None:
+                    window.close()
+                continue
+            if kind not in self.windows:
+                self.windows[kind] = PropWindow(cat, kind, self.assets)
+            window = self.windows[kind]
+            showing = visible and not window.isVisible()
+            window.sync(visible)
+            if showing:
                 cat.raise_()
-            if kind in self.windows:
-                if data is None:
-                    self.windows.pop(kind).close()
-                else:self.windows[kind].sync(visible)
         show=visible and bool(self.windows or cat.scene.activity) and not cat.model.settings.get('click_through',False)
         if show:
             props=tuple(kind for kind in self.windows if kind!='ball')
