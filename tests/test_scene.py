@@ -35,6 +35,14 @@ class SceneTests(unittest.TestCase):
         self.assertLess(m.satiety,initial)
         self.assertEqual(s.bowl.amount,1)
 
+    def test_long_approach_retains_walk_action_instead_of_autonomous_rotation(self):
+        s,m=self.scene('food')
+        for _ in range(80):
+            s.update(.2,m,100,200,1,True,0)
+            m.tick(.2)
+            self.assertEqual(m.action,'walk')
+        self.assertGreater(m.elapsed,15)
+
     def test_cancelled_food_never_replaces_new_touch(self):
         s,m=self.scene('food');s.cancel();m.touch('head',.2)
         for _ in range(50):s.update(.1,m,100,200,1,True,0)
@@ -129,6 +137,27 @@ class SceneTests(unittest.TestCase):
         s.scratcher.x+=100;s.scratcher.floor-=50
         s.update(.1,m,100,200,1,True,0)
         self.assertNotEqual(before,s.destination)
+
+    def test_scratcher_displaced_off_reachable_floor_cannot_award_contact(self):
+        s,m=self.scene('scratch')
+        x,y=self.arrive(s,m)
+        s.scratcher.floor=LIMITS[3]+307
+        s.update(.016,m,x,y,1,True,.28)
+        self.assertIsNone(s.activity)
+        self.assertEqual(s.scratcher.scratches,0)
+
+    def test_track_hit_checks_height_as_well_as_lateral_alignment(self):
+        s,m=self.scene('track')
+        x,y=self.arrive(s,m)
+        # The nearest ball is horizontal-aligned but outside the paw's reach in y.
+        s.scratcher.track_radius=(s.scratcher.track_radius[0],.3)
+        s.scratcher.angles=[2.6,.2,4.2]
+        s.update(.016,m,x,y,1,True,.65)
+        self.assertEqual(s.activity.stage,'interact')
+        self.assertEqual(s.scratcher.taps,0)
+        s.scratcher.track_radius=(s.scratcher.track_radius[0],.035)
+        s.update(.016,m,x,y,1,True,.7)
+        self.assertEqual(s.scratcher.taps,1)
 
     def test_wand_respects_distance_and_can_be_cancelled(self):
         s,m=self.scene('wand')

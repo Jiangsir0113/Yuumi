@@ -42,7 +42,7 @@ diagnostic("Qt modules imported")
 
 ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 ASSETS = ROOT / "assets"
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 
 def state_path():
@@ -98,7 +98,7 @@ class CarePanel(QDialog):
     def __init__(self, pet):
         super().__init__(None, Qt.WindowType.Window)
         self.pet = pet
-        self.setWindowTitle("悠米 1.4.0 · 陪伴小屋")
+        self.setWindowTitle(f"悠米 {VERSION} · 陪伴小屋")
         self.setWindowIcon(pet.windowIcon())
         self.setMinimumWidth(440)
         self.resize(460, 610)
@@ -554,9 +554,12 @@ class CatWindow(QWidget):
                 self.model.contact(self.contact_region,dt,speed/self.scale)
             if visible:
                 cursor=QCursor.pos()
+                previous_scene_message=self.scene.message
                 self.scene.update(dt,self.model,self.x(),self.y(),self.scale,
                                   self.animator.execution_ready and self.animator.action==self.model.action,
                                   self.animator.phase,(cursor.x(),cursor.y()),self.scene_limits())
+                if self.scene.message and self.scene.message!=previous_scene_message:
+                    self.say(self.scene.message)
                 if self.scene.activity:
                     self.direction=self.scene.direction
                     if self.scene.destination and self.model.action in {"walk","trot"}:
@@ -948,7 +951,7 @@ def main():
             running=bytes(socket.readAll()).decode(errors="replace")
             if running!=VERSION:
                 QMessageBox.information(None,"先退出旧版悠米",
-                    "旧版悠米仍在运行。请从系统托盘或猫咪右键菜单选择“退出悠米”，再打开这个 1.4.0 新版。")
+                    f"旧版悠米仍在运行。请从系统托盘或猫咪右键菜单选择“退出悠米”，再打开这个 {VERSION} 新版。")
             return 0
         server = QLocalServer()
         QLocalServer.removeServer(channel)
@@ -998,7 +1001,7 @@ def main():
         QTimer.singleShot(8000,finish_benchmark)
     if args.benchmark_all:
         from benchmarks import LiveBenchmark
-        pet.live_benchmark=LiveBenchmark(pet,Path(args.benchmark_all))
+        pet.live_benchmark=LiveBenchmark(pet,Path(args.benchmark_all),VERSION)
     if args.quit_after:
         QTimer.singleShot(args.quit_after*1000, pet.quit_app)
     return app.exec()

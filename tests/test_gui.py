@@ -3,7 +3,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from PySide6.QtCore import QPoint, QPointF, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -201,6 +201,51 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(len(self.pet.scene_view.windows),3)
         self.pet.perform('put_away')
         self.assertFalse(self.pet.scene_view.windows)
+
+    def test_stationary_props_stop_repainting_but_animation_and_refill_update(self):
+        class PaintCounter(QObject):
+            def __init__(self):
+                super().__init__()
+                self.counts={}
+
+            def eventFilter(self,window,event):
+                if event.type()==QEvent.Type.Paint:
+                    self.counts[window.kind]=self.counts.get(window.kind,0)+1
+                return False
+
+        self.pet.model.satiety=self.pet.model.thirst=30
+        for action in ('food','water','snack','ball','scratch'):
+            self.pet.perform(action)
+        self.pet.perform('stop')
+        view=self.pet.scene_view
+        scene=self.pet.scene
+        scene.feeder.dispensing=0
+        scene.feeder.amount=.5
+        counter=PaintCounter()
+        for window in view.windows.values():
+            window.installEventFilter(counter)
+        view.sync(True)
+        QTest.qWait(40)
+        counter.counts.clear()
+
+        for _ in range(8):
+            scene.clock+=1/64
+            view.sync(True)
+            QTest.qWait(5)
+        self.assertGreater(counter.counts.get('fountain',0),1)
+        for kind in ('feeder','snack','scratcher','ball'):
+            self.assertEqual(counter.counts.get(kind,0),0,kind)
+
+        scene.feeder.amount=.25
+        scene.scratcher.impulse(0,3.)
+        scene.scratcher.step(1/64)
+        scene.ball.angle+=.05
+        view.windows['snack'].refill()
+        view.sync(True)
+        QTest.qWait(20)
+        for kind in ('feeder','snack','scratcher','ball'):
+            self.assertGreater(counter.counts.get(kind,0),0,kind)
+        self.assertIn('25%',view.windows['feeder'].toolTip())
 
     def test_click_through_can_be_recovered_from_tray_path(self):
         self.pet.setting('click_through',True)

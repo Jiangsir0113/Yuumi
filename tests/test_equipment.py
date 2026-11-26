@@ -71,6 +71,53 @@ class EquipmentTests(unittest.TestCase):
         s.update(.016,m,x,y,1,True,0)
         self.assertEqual(s.activity.stage,'approach');self.assertEqual(m.action,'walk')
 
+    def test_adjacent_care_request_replaces_old_action_and_queue(self):
+        s,m=self.setup_scene('water')
+        s.begin('food',m,100,200,1,LIMITS)
+        for _ in range(6):s.update(.25,m,100,200,1,True,0)
+        x,y=s.destination
+        s.update(0,m,x,y,1,True,0)
+        m.tick(2.1)
+        self.assertEqual(m.action,'eat')
+        s.fountain.x=s.feeder.x
+        s.fountain.floor=s.feeder.floor
+        self.assertTrue(s.begin('water',m,x,y,1,LIMITS))
+        self.assertEqual(s.activity.stage,'interact')
+        self.assertEqual(m.action,'sniff')
+        self.assertEqual(m.queue,['drink','lick'])
+
+    def test_empty_device_request_keeps_previous_scene(self):
+        s,m=self.setup_scene('water')
+        s.cancel(m)
+        s.fountain.amount=0
+        self.assertTrue(s.begin('scratch',m,100,200,1,LIMITS))
+        activity=s.activity
+        self.assertFalse(s.begin('water',m,100,200,1,LIMITS))
+        self.assertIs(s.activity,activity)
+        self.assertEqual(s.activity.kind,'scratch')
+
+    def test_bottom_edge_device_does_not_trigger_distant_care(self):
+        s,m=self.setup_scene('water')
+        s.fountain.floor=LIMITS[3]+307
+        s.update(.02,m,100,200,1,True,0)
+        self.assertIsNone(s.activity)
+        self.assertEqual(m.action,'idle')
+        self.assertEqual(s.fountain.amount,1)
+
+    def test_feeder_can_reverse_without_moving_its_window_origin(self):
+        s,m=self.setup_scene('food')
+        obj=s.feeder
+        obj.facing=1
+        left=240
+        obj.x=left+obj.width*obj.mouth[0]
+        s.update(0,m,100,200,1,True,0)
+        self.assertEqual(obj.facing,-1)
+        self.assertAlmostEqual(obj.left,left)
+        for _ in range(5):
+            s.update(.02,m,100,200,1,True,0)
+            self.assertAlmostEqual(obj.left,left)
+            self.assertEqual(obj.facing,-1)
+
     def test_touch_cancels_goal_while_device_finishes_dispensing(self):
         s,m=self.setup_scene();s.cancel();m.touch('head',.1)
         for _ in range(8):s.update(.2,m,100,200,1,True,0)

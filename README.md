@@ -2,11 +2,23 @@
 
 一只会在 Windows 桌面漫步、休息、吃猫粮，也会回应摸头、挠下巴和玩具的金渐层。照片风格，离线运行，本地存档。
 
-**[下载 v1.4.0](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.0)** · **[查看所有旧版本](https://github.com/Jiangsir0113/Yuumi/releases)** · **[更新日志](CHANGELOG.md)** · **[动作与玩具预览](docs/media/v1.4.0-preview.mp4)**
+**[下载 v1.4.1](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.1)** · **[查看所有旧版本](https://github.com/Jiangsir0113/Yuumi/releases)** · **[更新日志](CHANGELOG.md)** · **[动作与玩具预览](docs/media/v1.4.0-preview.mp4)**
 
 <p align="center"><img src="docs/images/v1.4.0-equipment.png" width="900" alt="悠米与 1.2 倍高度的大蒜抓板、小佩 SOLO 喂食器、SOLO SE 饮水机和弗列加特猫条"></p>
 
 > 当前 Windows x64 构建内置 NumPy 2.5.4，仍需要 `x86-64-v2 / X86_V2` 指令集。本次没有变更 CPU 兼容目标，详见[兼容性说明](docs/COMPATIBILITY.md)。
+
+## v1.4.1 互动与流畅度修复
+
+| 项目 | v1.4.1 改动 |
+| --- | --- |
+| 吃喝切换 | 切换设备时接管原动作，喂食与饮水目标和当前姿势保持一致。 |
+| 抓板接触 | 根据爪子、绳面和圆槽的位置判断可达性，修正靠屏幕边缘时的站位。 |
+| 靠近道具 | 远距离走向道具时持续行走，直到到达、取消或切换目标。 |
+| 桌面重绘 | 静止道具按变化重绘，滚动小球、水波和出粮继续更新。 |
+| 动画切换 | 后台解码完成后渐入正式帧，动作仍可打断，素材采样率维持 64 FPS。 |
+
+[Windows 独立 exe 验证](docs/VERIFICATION-v1.4.1.md) · [v1.4.0 发布与附件](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.0)
 
 ## v1.4.0 新道具与尺寸更新
 
@@ -56,7 +68,7 @@
 
 ## 下载与启动
 
-1. 在 [v1.4.0 发布页](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.0) 下载 `Yuumi-v1.4.0-windows-x64.exe`，可自行重命名为 `悠米.exe`。
+1. 在 [v1.4.1 发布页](https://github.com/Jiangsir0113/Yuumi/releases/tag/v1.4.1) 下载 `Yuumi-v1.4.1-windows-x64.exe`，可自行重命名为 `悠米.exe`。
 2. 若旧版仍在运行，先用旧版的右键或托盘菜单正常退出。
 3. 双击 exe。无需安装 Python；单文件首次启动需要几秒解包。
 
@@ -118,7 +130,7 @@ py -3.14 -m venv .venv
 
 构建输出为 `dist/悠米.exe`。使用独立存档开发：`python main.py --state-file qa/dev-state.json --panel`。
 
-详见[开发说明](docs/DEVELOPMENT.md)、[v1.4.0 验证记录](docs/VERIFICATION-v1.4.0.md)和[版本发布规则](docs/RELEASING.md)。旧版验证记录仍保留：[v1.3.1](docs/VERIFICATION-v1.3.1.md)、[v1.3.0](docs/VERIFICATION-v1.3.md)、[v1.2.0](docs/VERIFICATION.md)。
+详见[开发说明](docs/DEVELOPMENT.md)、[v1.4.1 验证记录](docs/VERIFICATION-v1.4.1.md)和[版本发布规则](docs/RELEASING.md)。旧版验证记录仍保留：[v1.4.0](docs/VERIFICATION-v1.4.0.md)、[v1.3.1](docs/VERIFICATION-v1.3.1.md)、[v1.3.0](docs/VERIFICATION-v1.3.md)、[v1.2.0](docs/VERIFICATION.md)。
 
 ## 实现与数据
 

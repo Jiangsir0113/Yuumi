@@ -22,6 +22,9 @@ from cat_model import ACTIONS
 
 cv2.setNumThreads(1)
 WIDTH,HEIGHT=320,260
+DECODE_HANDOFF_SECONDS = .096
+POSE_BLEND_SECONDS = .18
+FLOW_RAMP_SECONDS = .04
 GRID_X,GRID_Y=np.meshgrid(np.arange(WIDTH,dtype=np.float32),np.arange(HEIGHT,dtype=np.float32))
 DIRECTIONAL={"walk","trot","crouch","pounce","sniff","eat","treat","drink","ball","track","scratch"}
 STANDING={"walk","trot","back","sniff","eat","treat","drink","crouch","pounce","stretch","scratch"}
@@ -182,6 +185,13 @@ class MotionBank:
         self.warm=deque(sorted(self.pinned))
         self.frame_events=0
         self.last_index=None
+        # Track actual WebP indexes separately from the nominal playback clock.
+        self.selected_clip_frame = None
+        self.selected_frame_events = 0
+        self.fallback_samples = 0
+        self.handoff_samples = 0
+        self.last_sample_kind = None
+        self.handoff_elapsed = None
         self.closed=False
         self.prefetch("idle")
         if self.warm:
@@ -216,9 +226,6 @@ class MotionBank:
                     break
                 continue
             self.decoded_bytes-=frames.nbytes
-        if self.warm and len(self.pending)<2:
-            if self.prefetch(self.warm[0]):
-                self.warm.popleft()
 
     def prefetch(self,key):
         if self.closed or key in self.errors:
@@ -250,10 +257,15 @@ class MotionBank:
         denominator=max(1,len(scores)-1) if self.info[key]["once"] else len(scores)
         return index/denominator*self.info[key]["duration"]
 
-    def sample(self,key,seconds,absolute=False):
+    def sample(self,key,seconds,absolute=False,dt=0.):
+        same_clip = self.last_index is not None and key == self.last_index[0]
+        if not same_clip:
+            self.handoff_elapsed = None
         self.current=key
         self._collect(key)
         self.prefetch(key)
+        if self.warm and self.prefetch(self.warm[0]):
+            self.warm.popleft()
         info=self.info[key]
         duration=info["duration"]
         phase=min(max(0.,seconds),max(0.,duration-.000001)) if info["once"] or absolute else seconds%duration
@@ -265,10 +277,35 @@ class MotionBank:
         if key in self.decoded:
             frames=self.decoded[key]
             self.decoded.move_to_end(key)
-            return frames[min(index,len(frames)-1)]
-        # A first-time action remains live while its full 64fps clip is decoded.
+            index = min(index, len(frames)-1)
+            selected = (key, index)
+            if selected != self.selected_clip_frame:
+                self.selected_frame_events += 1
+            self.selected_clip_frame = selected
+            if same_clip and self.last_sample_kind == "fallback":
+                self.handoff_elapsed = 0.
+            elif self.handoff_elapsed is not None:
+                self.handoff_elapsed += dt
+            if self.handoff_elapsed is not None and self.handoff_elapsed < DECODE_HANDOFF_SECONDS:
+                self.last_sample_kind = "handoff"
+                self.handoff_samples += 1
+                t = self.handoff_elapsed / DECODE_HANDOFF_SECONDS
+                weight = t*t*(3-2*t)
+                fallback = self._fallback_frame(key, phase, info)
+                return cv2.addWeighted(fallback, 1-weight, frames[index], weight, 0)
+            self.handoff_elapsed = None
+            self.last_sample_kind = "decoded"
+            return frames[index]
+        self.handoff_elapsed = None
+        self.selected_clip_frame = None
+        self.last_sample_kind = "fallback"
+        self.fallback_samples += 1
+        return self._fallback_frame(key, phase, info)
+
+    def _fallback_frame(self,key,phase,info):
+        # Follow the same timeline while the clip decodes and during handoff.
         source=self.sources[key]
-        p=phase/duration*(len(source)-1 if info["once"] else len(source))
+        p=phase/info["duration"]*(len(source)-1 if info["once"] else len(source))
         i=min(len(source)-1,int(p))
         j=min(len(source)-1,i+1) if info["once"] else (i+1)%len(source)
         t=p-i
@@ -301,6 +338,7 @@ class Animator:
         self.non_identical_frames=0
         self.flow_worker=ThreadPoolExecutor(max_workers=1,thread_name_prefix="Youmi-blend")
         self.flow_future=None
+        self.flow_available_at=None
         self.blend_start=None
         self.hit_mirrored=False
 
@@ -321,7 +359,7 @@ class Animator:
             self.graph.urgent=self.graph.urgent or urgent
             return
         old=self.action
-        if self.graph.edge is not None or self.blend is not None:
+        if self.graph.edge is not None or self.blend_start is not None:
             self.interruptions+=1
         same_clip=ACTIONS[old].sprite==ACTIONS[action].sprite
         key=ACTIONS[action].sprite
@@ -332,7 +370,8 @@ class Animator:
         self.graph.set_goal(self.posture(action,direction),urgent)
         self.bank.prefetch(key)
         # On an in-progress edge, reversal uses the exact current edge position.
-        self.force_blend=self.last is not None and (self.blend is not None or (self.graph.edge is None and not same_clip))
+        self.force_blend=self.last is not None and not same_clip and (
+            self.graph.edge is None or self.blend_start is not None)
         self.switches.append({"from":old,"to":action,"phase":round(self.phase,4),
             "posture_edge":self.graph.edge,"posture_progress":round(self.graph.progress,4)})
 
@@ -352,12 +391,12 @@ class Animator:
         if self.graph.edge is not None:
             a,b,key,mirrored,_=EDGES[self.graph.edge]
             visual=("bridge",self.graph.edge)
-            target=self.bank.sample(key,self.graph.progress*self.bank.info[key]["duration"],absolute=True)
+            target=self.bank.sample(key,self.graph.progress*self.bank.info[key]["duration"],absolute=True,dt=dt)
         else:
             key=ACTIONS[action].sprite
             mirrored=action in DIRECTIONAL and direction<0
             visual=("clip",key,mirrored)
-            target=self.bank.sample(key,self.phase)
+            target=self.bank.sample(key,self.phase,dt=dt)
         if mirrored:
             target=np.ascontiguousarray(target[:,::-1])
         self.hit_mirrored=mirrored
@@ -372,7 +411,7 @@ class Animator:
                 self.flow_future.cancel()
             self.blend_start=self.last.copy()
             self.blend=None
-            self.flow_assist=0.
+            self.flow_available_at=None
             self.flow_future=self.flow_worker.submit(PixelBlend,self.blend_start,target.copy())
             self.blend_elapsed=0.
         self.force_blend=False
@@ -380,25 +419,32 @@ class Animator:
         if self.blend_start is not None:
             if not new_blend:
                 self.blend_elapsed+=dt
-            t=min(1.,self.blend_elapsed/.18)
+            t=min(1.,self.blend_elapsed/POSE_BLEND_SECONDS)
             smooth=t*t*(3-2*t)
             result=cv2.addWeighted(self.blend_start,1-smooth,target,smooth,0)
-            if self.flow_future is not None and self.flow_future.done() and not self.flow_future.cancelled():
-                try:
-                    self.blend=self.flow_future.result()
-                except Exception:
-                    self.blend=None
+            if self.flow_future is not None and self.flow_future.done():
+                if self.blend_elapsed<=POSE_BLEND_SECONDS-2*FLOW_RAMP_SECONDS:
+                    try:
+                        self.blend=self.flow_future.result()
+                        self.flow_available_at=self.blend_elapsed
+                    except Exception:
+                        self.blend=None
                 self.flow_future=None
             if self.blend is not None:
-                corrected=self.blend.sample(target,t)
-                # Ramp assistance gently; a late worker result never snaps in.
-                assist=min(1.,dt/.04) if not hasattr(self,"flow_assist") else min(1.,self.flow_assist+dt/.04)
-                self.flow_assist=assist
-                result=cv2.addWeighted(result,1-assist,corrected,assist,0)
-            if self.blend_elapsed>=.18:
+                elapsed=self.blend_elapsed
+                # Flow enters from zero and fades out before the pose fully settles.
+                assistance=max(0.,min(1.,(elapsed-self.flow_available_at)/FLOW_RAMP_SECONDS,
+                                     (POSE_BLEND_SECONDS-elapsed)/FLOW_RAMP_SECONDS))
+                if assistance>0:
+                    corrected=self.blend.sample(target,t)
+                    result=cv2.addWeighted(result,1-assistance,corrected,assistance,0)
+            if self.blend_elapsed>=POSE_BLEND_SECONDS:
+                if self.flow_future is not None:
+                    self.flow_future.cancel()
+                    self.flow_future=None
                 self.blend=None
                 self.blend_start=None
-                self.flow_assist=0.
+                self.flow_available_at=None
         else:
             result=target
         if self.last is not None and cv2.norm(self.last,result,cv2.NORM_L1)>0:
@@ -454,12 +500,18 @@ class Animator:
         self.action=action
         self.direction=direction
         self.phase=phase
+        self.phase_speed=1.
         self.graph=PostureGraph()
         self.graph.node=self.posture(action,direction)
         self.graph.goal=self.graph.node
         self.last=None
         self.blend=None
         self.blend_start=None
+        self.force_blend=False
+        if self.flow_future is not None:
+            self.flow_future.cancel()
+            self.flow_future=None
+        self.flow_available_at=None
         self.visual_key=None
         return self.update(action,0,direction)
 

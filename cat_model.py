@@ -99,12 +99,12 @@ class CatModel:
         self.queue = list(actions[1:])
         self.start(actions[0])
 
-    def request(self, action: str):
+    def request(self, action: str, *, interrupt_care: bool = False):
         """An intentional user action overrides autonomous behavior."""
         if action in TOUCH_ACTIONS:
             return self.touch(action, .6)
         if action == "food":
-            if self.action in {"sniff", "eat", "treat", "drink"}:
+            if not interrupt_care and self.action in {"sniff", "eat", "treat", "drink"}:
                 self.last_message = "慢慢吃，不着急～"
                 return False
             if self.satiety > 96:
@@ -114,7 +114,7 @@ class CatModel:
                 return False
             self.sequence(["sniff", "eat", "lick", "groom"])
         elif action == "water":
-            if self.action in {"sniff", "eat", "treat", "drink"}:
+            if not interrupt_care and self.action in {"sniff", "eat", "treat", "drink"}:
                 self.last_message = "等我吃喝完这一口～"
                 return False
             if self.thirst>97:
@@ -122,7 +122,7 @@ class CatModel:
                 return False
             self.sequence(["sniff", "drink", "lick"])
         elif action == "snack":
-            if self.action in {"sniff", "eat", "treat", "drink"}:
+            if not interrupt_care and self.action in {"sniff", "eat", "treat", "drink"}:
                 return False
             if self.satiety > 96:
                 self.last_message = "小肚子装不下啦～"

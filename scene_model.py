@@ -6,6 +6,13 @@ from pathlib import Path
 from cat_model import CARE_ACTIONS, clamp
 
 TAU=math.tau
+CAT_WIDTH = 320
+CAT_GROUND = 286
+MOUTH_X = 286
+# Window-local contact points for the scratch sweep and the lowered batting paw.
+SCRATCH_PAW = (276, 165)
+TRACK_PAW = (270, 270)
+DEVICE_ATTR = {'food': 'feeder', 'water': 'fountain', 'snack': 'snack'}
 
 @dataclass
 class Bowl:
@@ -100,6 +107,14 @@ class Scratcher:
         return (self.x+self.width*(self.track_center[0]+self.track_radius[0]*math.cos(a)),
                 self.y+self.height*(self.track_center[1]+self.track_radius[1]*math.sin(a)))
 
+    def contact_point(self, kind, direction):
+        if kind == 'scratch':
+            u, v = self.rope_left if direction > 0 else self.rope_right
+        else:
+            u = self.track_center[0] - direction * self.track_radius[0]
+            v = self.track_center[1]
+        return self.x + self.width * u, self.y + self.height * v
+
     def impulse(self,index,velocity=3.5):
         self.speeds[index]=max(-7.,min(7.,self.speeds[index]+velocity))
         self.taps+=1
@@ -169,7 +184,7 @@ class SceneController:
         self.feeder=self.fountain=self.snack=None
 
     def refill(self,kind):
-        obj=getattr(self,{'food':'feeder','water':'fountain','snack':'snack'}[kind])
+        obj=getattr(self,DEVICE_ATTR[kind])
         if obj is None:return False
         if kind=='food':
             obj.stock=8
@@ -184,20 +199,55 @@ class SceneController:
         l,t,r,b=self.limits
         return (clamp(x,l,r),clamp(y,t,b))
 
+    def _reachable(self, x, y):
+        target = self._target(x, y)
+        # Screen geometry and native window positions round to integer pixels.
+        return target if math.dist((x, y), target) <= 1 else None
+
+    def _care_target(self, obj, left, scale):
+        floor = obj.contact_y + 94 * scale if obj.kind == 'snack' else obj.floor
+        for direction in (obj.facing, -obj.facing):
+            mouth, offset = obj.mouth[0], MOUTH_X
+            if direction < 0:
+                mouth, offset = 1 - mouth, CAT_WIDTH - offset
+            mouth_x = left + obj.width * mouth
+            target = self._reachable(mouth_x - offset * scale, floor - CAT_GROUND * scale)
+            if target is not None:
+                return target, direction, mouth_x
+        return None
+
+    def _scratcher_target(self, obj, kind, scale):
+        paw_x = SCRATCH_PAW[0] if kind == 'scratch' else TRACK_PAW[0]
+        for direction in (1, -1):
+            x, _ = obj.contact_point(kind, direction)
+            offset = paw_x if direction > 0 else CAT_WIDTH - paw_x
+            target = self._reachable(x - offset * scale, obj.floor - CAT_GROUND * scale)
+            if target is not None:
+                return target, direction
+        return None
+
     def _place_equipment(self,obj,preferred,scale):
         """Place complete silhouettes, including the food bag, inside the screen."""
-        l,t,r,b=self.limits
+        l,_,r,_=self.limits
         obstacles=[(o.left,o.left+o.width+o.extra_width) for o in (self.feeder,self.fountain,self.snack) if o and o is not obj]
         if self.scratcher:obstacles.append((self.scratcher.x,self.scratcher.x+self.scratcher.width))
         width=obj.width+obj.extra_width
-        candidates=[preferred-obj.width*obj.mouth[0],l,r+320*scale-width]
+        rightmost = r + CAT_WIDTH * scale - width
+        if rightmost < l:
+            return False
+        candidates=[preferred-obj.width*obj.mouth[0],l,rightmost]
         for left,right in obstacles:candidates.extend([left-width-20*scale,right+20*scale])
         def score(left):
             overlap=sum(max(0.,min(left+width,right)-max(left,start)) for start,right in obstacles)
-            return overlap*100+abs(left+obj.width*obj.mouth[0]-preferred)
-        left=min((clamp(c,l,r+320*scale-width) for c in candidates),key=score)
-        obj.facing=1 if left+obj.width*obj.mouth[0]-286*scale>=l else -1
-        obj.x=left+obj.width*(obj.mouth[0] if obj.facing>0 else 1-obj.mouth[0])
+            placement = self._care_target(obj, left, scale)
+            mouth_x = placement[2] if placement else left + obj.width * obj.mouth[0]
+            return placement is None, overlap * 100 + abs(mouth_x - preferred)
+        left=min((clamp(c,l,rightmost) for c in candidates),key=score)
+        placement = self._care_target(obj, left, scale)
+        if placement is None:
+            return False
+        _, obj.facing, obj.x = placement
+        return True
 
     def begin(self,kind,model,x,y,scale,limits):
         if self.activity and self.activity.kind==kind:
@@ -208,14 +258,25 @@ class SceneController:
         if kind=='water' and model.thirst>97:
             self.message='水分很充足，等会儿再喝～'
             return False
-        self.cancel()
+        device = getattr(self, DEVICE_ATTR[kind]) if kind in DEVICE_ATTR else None
+        if device is not None and device.amount <= .01:
+            needs_refill = (device.stock <= 0 and device.dispensing <= 0) if kind == 'food' else True
+            if needs_refill:
+                self.message = {
+                    'food': '粮仓空啦，右键喂食器补充弗列加特猫粮',
+                    'water': '请先右键续水',
+                    'snack': '猫条吃完啦，右键换一支',
+                }[kind]
+                return False
         self.limits=limits
-        self.activity=Activity(kind)
-        floor=y+286*scale
+        if device is not None and self._care_target(device, device.left, scale) is None:
+            self.message='暂时够不到，试试往桌面中间挪一点'
+            return False
+        floor=y+CAT_GROUND*scale
         l,t,r,b=limits
-        if kind in {'food','water','snack'}:
-            attr={'food':'feeder','water':'fountain','snack':'snack'}[kind]
-            obj=getattr(self,attr)
+        if kind in DEVICE_ATTR:
+            attr=DEVICE_ATTR[kind]
+            obj=device
             if obj is None:
                 bx=x+355*scale
                 facing=1
@@ -242,15 +303,13 @@ class SceneController:
                 if kind=='food':
                     packet=self.equipment_layout['fregate-food']
                     obj.logical_extra=height*.38*packet['width']/packet['height']+10
-                self._place_equipment(obj,bx,scale)
+                if not self._place_equipment(obj,bx,scale):
+                    self.message='暂时没有能靠近的摆放位置'
+                    return False
                 setattr(self,attr,obj)
             self.bowl=obj
             if kind=='food':
                 obj.dispense()
-                if obj.amount<=.01 and obj.dispensing<=0:
-                    self.cancel(model);self.message='粮仓空啦，右键喂食器补充弗列加特猫粮';return False
-            elif obj.amount<=.01:
-                self.cancel(model);self.message='请先右键续水' if kind=='water' else '猫条吃完啦，右键换一支';return False
             self.message={'food':'SOLO 正在出粮，悠米会走到食盆前','water':'去 SOLO SE 喝水啦','snack':'尝一口弗列加特猫条'}[kind]
         elif kind=='ball':
             if self.ball is None:
@@ -259,24 +318,31 @@ class SceneController:
                 self.ball=Ball(clamp(bx,l+15,r+305*scale),floor,25*scale,radius=12*scale)
             self.message='小球会留在桌面，碰到才会拨动'
         elif kind in {'scratch','track'}:
-            if self.scratcher is None:
+            obj = self.scratcher
+            if obj is None:
                 sx=clamp(x+285*scale,l+30*scale,r+100*scale)
                 layout=self.prop_layout
-                sf=clamp(floor,t+layout['logical_height']*scale,b+286*scale)
-                self.scratcher=Scratcher(sx,sf,scale,layout['logical_height'],layout['source_width'],layout['source_height'],
-                                         tuple(layout['rope_left']),tuple(layout['rope_right']),tuple(layout['track_center']),tuple(layout['track_radius']))
+                sf=clamp(floor,t+max(layout['logical_height'],CAT_GROUND)*scale,b+CAT_GROUND*scale)
+                obj=Scratcher(sx,sf,scale,layout['logical_height'],layout['source_width'],layout['source_height'],
+                              tuple(layout['rope_left']),tuple(layout['rope_right']),tuple(layout['track_center']),tuple(layout['track_radius']))
+            if self._scratcher_target(obj, kind, scale) is None:
+                self.message='暂时够不到，试试往桌面中间挪一点'
+                return False
+            self.scratcher = obj
             self.message='抓抓白色绳面' if kind=='scratch' else '用小爪拨动圆槽里的球'
         elif kind=='wand':
-            self.activity.stage='watch'
-            model.queue.clear()
-            model.start('look')
             self.message='缓缓移动鼠标，悠米会注视、蓄力和扑抓'
         else:
             raise ValueError('Unknown scene activity')
-        if kind!='wand':
-            model.queue.clear()
+        self.cancel()
+        self.activity=Activity(kind)
+        model.queue.clear()
+        if kind=='wand':
+            self.activity.stage='watch'
+            model.start('look')
+        else:
             self.update(0.,model,x,y,scale,True,0.,limits=limits)
-        return True
+        return self.activity is not None
 
     def _enter(self,stage,model,action):
         self.activity.stage=stage
@@ -316,13 +382,15 @@ class SceneController:
             self._wand(dt,model,x,y,scale,ready,phase,pointer)
             return
         kind=a.kind
-        if kind in {'food','water','snack'}:
+        if kind in DEVICE_ATTR:
             obj=self.bowl
-            obj.facing=1 if obj.x-286*scale>=l else -1
-            self.direction=obj.facing
-            offset=286 if self.direction>0 else 34
-            floor=obj.floor if kind!='snack' else obj.contact_y+94*scale
-            target=self._target(obj.x-offset*scale,floor-286*scale)
+            placement = self._care_target(obj, obj.left, scale)
+            if placement is None:
+                self.cancel(model)
+                self.message='暂时够不到，试试往桌面中间挪一点'
+                return
+            target, obj.facing, obj.x = placement
+            self.direction = obj.facing
         elif kind=='ball':
             obj=self.ball
             self.direction=1 if obj.x>x+160*scale else -1
@@ -330,14 +398,12 @@ class SceneController:
             target=self._target(obj.x-offset*scale,obj.floor-286*scale)
         else:
             obj=self.scratcher
-            # Prefer a side with room for the entire cat; turn toward the prop.
-            paw=276 if kind=='scratch' else 270
-            left_x=obj.rope_left[0] if kind=='scratch' else obj.track_center[0]-obj.track_radius[0]
-            right_x=obj.rope_right[0] if kind=='scratch' else obj.track_center[0]+obj.track_radius[0]
-            left_target=obj.x+obj.width*left_x-paw*scale
-            right_target=obj.x+obj.width*right_x-(320-paw)*scale
-            self.direction=1 if left_target>=l else -1
-            target=self._target(left_target if self.direction>0 else right_target,obj.floor-286*scale)
+            placement = self._scratcher_target(obj, kind, scale)
+            if placement is None:
+                self.cancel(model)
+                self.message='暂时够不到，试试往桌面中间挪一点'
+                return
+            target, self.direction = placement
         distance=math.hypot(target[0]-x,target[1]-y)
         if a.stage=='approach':
             self.destination=target
@@ -346,16 +412,22 @@ class SceneController:
                 if kind=='food' and obj.dispensing>0:
                     if model.action!='look':model.start('look')
                     return
-                a.stage='interact';a.stage_time=0.;a.contact_cycle=-1
-                if kind in {'food','water','snack'}:
+                if kind in DEVICE_ATTR:
+                    if not model.request(kind, interrupt_care=True):
+                        self.cancel()
+                        self.message=model.last_message
+                        return
                     self.last_need=model.thirst if kind=='water' else model.satiety
-                    model.request(kind)
                 else:
                     model.queue.clear();model.start('ball' if kind=='ball' else kind,90)
-            elif model.action not in {'walk','trot'}:
-                model.queue.clear();model.start('walk')
+                a.stage='interact';a.stage_time=0.;a.contact_cycle=-1
+            else:
+                if model.action not in {'walk','trot'}:
+                    model.queue.clear();model.start('walk')
+                # The scene owns the gait until the cat reaches the prop.
+                model.remaining = max(model.remaining, 1.)
             return
-        if kind in {'food','water','snack'}:
+        if kind in DEVICE_ATTR:
             if distance>15*scale:
                 self._enter('approach',model,'walk');self.destination=target
                 return
@@ -374,7 +446,8 @@ class SceneController:
             if model.action not in CARE_ACTIONS:
                 self.cancel()
             return
-        if distance>30*scale and a.stage_time-a.struck_at>.35:
+        needs_reposition = distance > (30 if kind == 'ball' else 12) * scale
+        if needs_reposition and (kind != 'ball' or a.stage_time-a.struck_at>.35):
             self._enter('approach',model,'walk')
             self.destination=target
             return
@@ -386,25 +459,30 @@ class SceneController:
         fraction=phase/duration-cycle
         strike=.10<=fraction<=.30 if kind=='scratch' else .48<=fraction<=.75
         if strike and a.contact_cycle!=cycle:
-            a.contact_cycle=cycle
             hit=False
-            if kind=='scratch':
-                obj.scratches+=1;obj.glow=.2
-                obj.glow_side=self.direction
-                hit=True
-            elif kind=='track':
-                contact_x=x+(278 if self.direction>0 else 42)*scale
-                index=min(range(3),key=lambda i:abs(obj.ball_position(i)[0]-contact_x))
-                # A bat occurs only when a ball reaches the paw's contact arc.
-                if abs(obj.ball_position(index)[0]-contact_x)<min(18*scale,obj.width*.20):
-                    obj.impulse(index,3.8*self.direction)
-                    hit=True
+            if kind in {'scratch', 'track'}:
+                paw_x, paw_y = SCRATCH_PAW if kind == 'scratch' else TRACK_PAW
+                if self.direction < 0:
+                    paw_x = CAT_WIDTH - paw_x
+                paw = x + paw_x * scale, y + paw_y * scale
+                if kind == 'scratch' and math.dist(obj.contact_point(kind, self.direction), paw) <= 16 * scale:
+                    obj.scratches += 1
+                    obj.glow = .2
+                    obj.glow_side = self.direction
+                    hit = True
+                elif kind == 'track':
+                    distances = [math.dist(obj.ball_position(i), paw) for i in range(3)]
+                    index = min(range(3), key=distances.__getitem__)
+                    if distances[index] <= min(18 * scale, obj.width * .20):
+                        obj.impulse(index, 3.8 * self.direction)
+                        hit = True
             else:
                 contact_x=x+(270 if self.direction>0 else 50)*scale
                 if abs(obj.x-contact_x)<24*scale:
                     obj.velocity+=105*scale*self.direction
                     hit=True
             if hit:
+                a.contact_cycle=cycle
                 a.strikes+=1
                 a.struck_at=a.stage_time
                 model.happiness=clamp(model.happiness+.45)

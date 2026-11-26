@@ -1,9 +1,11 @@
 """Small independent transparent windows for world objects (not a desktop overlay)."""
-from PySide6.QtCore import QPoint, QPointF, QRectF, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QRadialGradient
-from PySide6.QtWidgets import QWidget,QHBoxLayout,QPushButton,QMenu,QLabel
+from PySide6.QtWidgets import QWidget,QHBoxLayout,QPushButton,QMenu
 from pathlib import Path
 import math
+
+from scene_model import CAT_GROUND
 
 class PropWindow(QWidget):
     def __init__(self,cat,kind,assets):
@@ -21,11 +23,42 @@ class PropWindow(QWidget):
         self.press=None
         self.moving=False
         self.transparent=False
+        self._last_visual=None
+        self._last_tooltip_state=None
         self.setToolTip('点击绳面抓挠，点击底部圆槽拨球；拖动可搬家' if kind=='scratcher' else '点击互动，拖动可搬家')
 
     @property
     def data(self):
-        return getattr(self.cat.scene,'scratcher' if self.kind=='scratcher' else self.kind)
+        return getattr(self.cat.scene,self.kind)
+
+    def _visual_state(self,data):
+        if self.kind=='scratcher':
+            angles=tuple(round(angle,3) for angle in data.angles)
+            glow=round(160*data.glow/.2)
+            return (data.width,data.height,angles,glow,data.glow_side)
+        if self.kind=='ball':
+            return (data.radius,round(math.degrees(data.angle)%360,1))
+        pulse=round(160*data.pulse)
+        if self.kind=='feeder':
+            detail=(round(data.amount*30),self.cat.scene.clock if data.dispensing>0 else None)
+        elif self.kind=='fountain':
+            detail=(data.amount,self.cat.scene.clock) if data.amount>.01 else None
+        else:
+            detail=data.amount
+        return (data.width,data.height,data.facing,pulse,detail)
+
+    def _sync_tooltip(self,data):
+        amount=round(data.amount*100)
+        state=(amount,data.stock) if self.kind=='feeder' else amount
+        if state==self._last_tooltip_state:
+            return
+        self._last_tooltip_state=state
+        if self.kind=='feeder':
+            self.setToolTip(f'SOLO · 粮仓 {data.stock}/8 份 · 食盆 {amount}%\n点食盆叫悠米吃粮，点右侧粮袋补粮；右键更多')
+        elif self.kind=='fountain':
+            self.setToolTip(f'SOLO SE · 余水 {amount}% · 右键续水')
+        else:
+            self.setToolTip(f'弗列加特猫条 · 剩余 {amount}% · 右键换一支')
 
     def sync(self,visible=True):
         data=self.data
@@ -33,24 +66,25 @@ class PropWindow(QWidget):
             self.hide();return
         s=self.cat.scale
         if self.kind=='scratcher':
-            self.resize(round(data.width),round(data.height))
-            self.move(round(data.x),round(data.y))
+            geometry=QRect(round(data.x),round(data.y),round(data.width),round(data.height))
         elif self.kind in {'feeder','fountain','snack'}:
-            extra=data.extra_width
-            self.resize(round(data.width+extra),round(data.height))
-            self.move(round(data.left),round(data.y))
-            self.setToolTip({'feeder':f'SOLO · 粮仓 {data.stock}/8 份 · 食盆 {data.amount:.0%}\n点食盆叫悠米吃粮，点右侧粮袋补粮；右键更多',
-                             'fountain':f'SOLO SE · 余水 {data.amount:.0%} · 右键续水',
-                             'snack':f'弗列加特猫条 · 剩余 {data.amount:.0%} · 右键换一支'}[self.kind])
+            geometry=QRect(round(data.left),round(data.y),round(data.width+data.extra_width),round(data.height))
+            self._sync_tooltip(data)
         else:
-            self.resize(round(36*s),round(36*s))
-            self.move(round(data.x-18*s),round(data.floor-30*s))
+            geometry=QRect(round(data.x-18*s),round(data.floor-30*s),round(36*s),round(36*s))
         transparent=self.cat.model.settings.get('click_through',False)
         if transparent!=self.transparent:
             self.transparent=transparent
             self.setWindowFlag(Qt.WindowType.WindowTransparentForInput,transparent)
-        self.setVisible(visible)
-        if visible:self.update()
+        if self.geometry()!=geometry:
+            self.setGeometry(geometry)
+        if self.isVisible()!=visible:
+            self.setVisible(visible)
+        if visible:
+            visual=self._visual_state(data)
+            if visual!=self._last_visual:
+                self._last_visual=visual
+                self.update()
 
     def _sphere(self,p,center,radius,color):
         gradient=QRadialGradient(center-QPointF(radius*.3,radius*.3),radius*1.3)
@@ -174,12 +208,22 @@ class PropWindow(QWidget):
         point=self.origin+delta
         px=max(rect.left(),min(point.x(),rect.right()-self.width()+1))
         py=max(rect.top(),min(point.y(),rect.bottom()-self.height()+1))
+        # Keep the prop's contact height within the cat's reachable floor range.
+        scale=self.cat.scale
+        _,cat_top,_,cat_bottom=self.cat.scene_limits()
+        if self.kind=='ball':
+            floor_offset=30*scale
+        elif self.kind=='snack':
+            floor_offset=data.height*data.mouth[1]+94*scale
+        else:
+            floor_offset=data.height
+        top=max(rect.top(),math.ceil(cat_top+CAT_GROUND*scale-floor_offset))
+        bottom=min(rect.bottom()-self.height()+1,math.floor(cat_bottom+CAT_GROUND*scale-floor_offset))
+        if top<=bottom:
+            py=max(top,min(py,bottom))
         if self.kind=='scratcher':
             data.x=px;data.floor=py+data.height
         elif self.kind in {'feeder','fountain','snack'}:
-            minimum=rect.top()+286*self.cat.scale-data.height
-            if self.kind=='snack':minimum=rect.top()+(286-94)*self.cat.scale-data.height*data.mouth[1]
-            py=max(minimum,py)
             data.x=px+data.width*(data.mouth[0] if data.facing>0 else 1-data.mouth[0]);data.floor=py+data.height
         else:
             data.x=px+self.width()/2;data.floor=py+30*self.cat.scale;data.velocity=0.
@@ -205,6 +249,7 @@ class SceneView:
     def __init__(self,cat,assets):
         self.cat,self.assets=cat,assets
         self.windows={}
+        self._toolbar_props=None
         self.toolbar=QWidget(None,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint|
                              Qt.WindowType.WindowStaysOnTopHint|Qt.WindowType.WindowDoesNotAcceptFocus)
         self.toolbar.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -229,19 +274,22 @@ class SceneView:
                 if data is None:
                     self.windows.pop(kind).close()
                 else:self.windows[kind].sync(visible)
-        show=visible and bool(self.windows or cat.scene.activity) and not cat.model.settings.get('click_through')
-        self.toolbar.setVisible(show)
+        show=visible and bool(self.windows or cat.scene.activity) and not cat.model.settings.get('click_through',False)
         if show:
-            self.buttons['scratch'].setVisible(cat.scene.scratcher is not None)
-            self.buttons['track'].setVisible(cat.scene.scratcher is not None)
-            self.buttons['food'].setVisible(cat.scene.feeder is not None)
-            self.buttons['water'].setVisible(cat.scene.fountain is not None)
-            self.buttons['snack'].setVisible(cat.scene.snack is not None)
-            self.toolbar.adjustSize()
+            props=tuple(kind for kind in self.windows if kind!='ball')
+            if props!=self._toolbar_props:
+                self._toolbar_props=props
+                for action,kind in [('scratch','scratcher'),('track','scratcher'),('food','feeder'),('water','fountain'),('snack','snack')]:
+                    self.buttons[action].setVisible(kind in props)
+                self.toolbar.adjustSize()
             rect=cat.available_rect()
             x=max(rect.left(),min(cat.x()+30,rect.right()-self.toolbar.width()+1))
             y=max(rect.top(),min(cat.y()-42,rect.bottom()-self.toolbar.height()+1))
-            self.toolbar.move(x,y)
+            position=QPoint(x,y)
+            if self.toolbar.pos()!=position:
+                self.toolbar.move(position)
+        if self.toolbar.isVisible()!=show:
+            self.toolbar.setVisible(show)
 
     def close(self):
         for window in self.windows.values():window.close()

@@ -1,9 +1,12 @@
 from pathlib import Path
+from bisect import bisect_right
+from collections import OrderedDict
+from concurrent.futures import Future
 import unittest
 import numpy as np
 import threading
-from unittest.mock import patch
-from animation_engine import Animator,PostureGraph,EDGES
+from unittest.mock import Mock, patch
+from animation_engine import Animator,PostureGraph,EDGES,DECODE_HANDOFF_SECONDS
 
 ASSETS=Path(__file__).resolve().parents[1]/"assets"
 
@@ -123,6 +126,64 @@ class AnimationTests(unittest.TestCase):
             if a.flow_future:a.flow_future.result(timeout=5)
         self.assertTrue(threads)
         self.assertTrue(all(name.startswith('Youmi-blend') for name in threads))
+
+    def test_decode_handoff_keeps_current_phase_and_tracks_actual_frame(self):
+        bank=self.animator.bank
+        key="walk"
+        phase=.37
+        frame_ends=bank.info[key]["frame_ends"]
+        decoded=bank.sources[key][-1]
+        frames=np.broadcast_to(decoded,(len(frame_ends),*decoded.shape))
+        with patch.object(bank,"decoded",OrderedDict()), patch.object(bank,"warm",[]), \
+             patch.object(bank,"_collect"), patch.object(bank,"prefetch"):
+            fallback=bank.sample(key,phase)
+            self.assertIsNone(bank.selected_clip_frame)
+            before=bank.selected_frame_events
+            index=bisect_right(frame_ends,phase)
+            self.assertFalse(np.array_equal(fallback,decoded))
+            bank.decoded[key]=frames
+            first=bank.sample(key,phase,dt=1/64)
+            self.assertTrue(np.array_equal(first,fallback))
+            self.assertEqual(bank.last_sample_kind,"handoff")
+            half=bank.sample(key,phase,dt=DECODE_HANDOFF_SECONDS/2)
+            self.assertFalse(np.array_equal(half,fallback))
+            self.assertFalse(np.array_equal(half,decoded))
+            settled=bank.sample(key,phase,dt=DECODE_HANDOFF_SECONDS/2)
+            self.assertTrue(np.array_equal(settled,decoded))
+            self.assertEqual(bank.last_sample_kind,"decoded")
+            self.assertEqual(bank.selected_clip_frame,(key,index))
+            self.assertEqual(bank.selected_frame_events,before+1)
+            bank.sample(key,frame_ends[index]+.001,dt=1/64)
+            self.assertEqual(bank.selected_clip_frame,(key,index+1))
+            self.assertEqual(bank.selected_frame_events,before+2)
+
+    def test_late_flow_result_does_not_change_finishing_pose_blend(self):
+        animator=self.animator
+        animator.reset_for_test("idle")
+        result=Mock()
+        future=Future()
+        with patch.object(animator.flow_worker,"submit",return_value=future):
+            animator.update("chin",0)
+            animator.update("chin",.125)
+            future.set_result(result)
+            animator.update("chin",1/64)
+            result.sample.assert_not_called()
+            animator.update("chin",.05)
+            self.assertTrue(animator.execution_ready)
+
+    def test_gait_clock_keeps_advancing_while_decode_is_handed_off(self):
+        animator=self.animator
+        bank=animator.bank
+        frames=np.stack(bank.sources["walk"])
+        with patch.object(bank,"decoded",OrderedDict()), patch.object(bank,"warm",[]), \
+             patch.object(bank,"_collect"), patch.object(bank,"prefetch"):
+            animator.reset_for_test("walk",.25)
+            bank.decoded["walk"]=frames
+            for frame in range(1,9):
+                animator.update("walk",1/64)
+                self.assertAlmostEqual(animator.phase,.25+frame/64)
+                self.assertTrue(animator.execution_ready)
+            self.assertEqual(bank.last_sample_kind,"decoded")
 
     def test_large_delta_has_same_visual_clock_as_simulation(self):
         a=self.animator;a.reset_for_test('walk',.4)
